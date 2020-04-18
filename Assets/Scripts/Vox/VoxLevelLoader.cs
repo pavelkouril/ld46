@@ -8,16 +8,23 @@ using CsharpVoxReader.Chunks;
 
 public class VoxLevelLoader : MonoBehaviour
 {
-    class MyLoader : IVoxLoader
+    public static bool IsTerrain(Color32 c) => (c.r == 0 && c.b == 0 && c.g != 0) || (c.r == 100 && c.g == 50 && c.b == 0);
+
+    public static bool IsFluidInput(Color32 c) => c.r == 0 && c.g == 0 && c.b == 255;
+
+    private VoxelGrid _grid;
+    private Data _inputData;
+
+    public class Data : IVoxLoader
     {
         public uint[] Palette { get; private set; }
-        public byte[,,] Data { get; private set; }
+        public byte[,,] Indices { get; private set; }
         public Vector3Int Size { get; private set; }
 
 
         public void LoadModel(int sizeX, int sizeY, int sizeZ, byte[,,] data)
         {
-            Data = data;
+            Indices = data;
             Size = new Vector3Int(sizeX, sizeY, sizeZ);
 
         }
@@ -56,17 +63,24 @@ public class VoxLevelLoader : MonoBehaviour
         }
     }
 
+    private void Awake()
+    {
+        _grid = GetComponent<VoxelGrid>();
+    }
+
     private void Start()
     {
-        var loader = new MyLoader();
-        VoxReader reader = new VoxReader("Assets/Levels/level0.vox", loader);
+        _inputData = new Data();
+        VoxReader reader = new VoxReader("Assets/Levels/level0.vox", _inputData);
 
         reader.Read();
+
+        _grid.Setup(_inputData);
 
         // DebugInput(loader);
     }
 
-    private static void DebugInput(MyLoader loader)
+    /*private static void DebugInput(Data loader)
     {
         for (int x = 0; x < loader.Size.x; x++)
         {
@@ -74,7 +88,7 @@ public class VoxLevelLoader : MonoBehaviour
             {
                 for (int z = 0; z < loader.Size.z; z++)
                 {
-                    var idx = loader.Data[x, y, z];
+                    var idx = loader.Indices[x, y, z];
                     if (idx != 0)
                     {
                         var color = loader.Palette[idx].ToColor();
@@ -88,10 +102,5 @@ public class VoxLevelLoader : MonoBehaviour
                 }
             }
         }
-    }
-
-    private void Update()
-    {
-
-    }
+    }*/
 }
