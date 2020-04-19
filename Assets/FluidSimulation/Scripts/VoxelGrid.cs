@@ -14,11 +14,20 @@ public class VoxelGrid : MonoBehaviour
         public Vector4 vNormal;
     };
 
+    [SerializeField]
+    private Material _terrainMaterial;
+
     public float[] CollisionField;
 
     public byte[] GrassMask;
 
     public Vector3Int Resolution { get; private set; }
+
+    public Mesh TerrainMesh { get; private set; }
+
+    public delegate string TerrainChangedEvt(VoxelGrid grid);
+
+    public event TerrainChangedEvt OnTerrainChanged;
 
     public ComputeShader Shader;
 
@@ -75,9 +84,10 @@ public class VoxelGrid : MonoBehaviour
         _kernelTripleCount = MarchingCubesShader.FindKernel("TripleCount");
 
         _terrainMeshFilter = gameObject.AddComponent<MeshFilter>();
+        TerrainMesh = new Mesh();
         _terrainMeshFilter.sharedMesh = new Mesh();
         _terrainMeshRenderer = gameObject.AddComponent<MeshRenderer>();
-        _terrainMeshRenderer.sharedMaterial = new Material(UnityEngine.Shader.Find("Standard"));
+        _terrainMeshRenderer.sharedMaterial = _terrainMaterial;
         _terrainMeshCollider = gameObject.AddComponent<MeshCollider>();
     }
 
