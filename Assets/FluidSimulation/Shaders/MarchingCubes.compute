@@ -329,7 +329,7 @@ float SampleData(int3 pos) {
 float SampleLinear(float3 p)
 {
 	// need to mitigate the offset in p[x], so +float3(0.5) to be in [0;1] range
-	return clamp(_densityTexture.SampleLevel(myPointClampSampler, p + float3(0.5, 0.5, 0.5), 0), 0, 1);
+	return clamp(_densityTexture.SampleLevel(myLinearClampSampler, p + float3(0.5, 0.5, 0.5), 0), 0, 1);
 }
 
 float3 VertexInterp(float3 p1, float3 p2, float valp1, float valp2)

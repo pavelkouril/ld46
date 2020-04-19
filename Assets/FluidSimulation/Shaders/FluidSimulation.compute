@@ -5,6 +5,7 @@
 #pragma kernel Advection
 #pragma kernel Overflow
 #pragma kernel Diffusion
+#pragma kernel CheckFlowers
 
 float _deltaTime;
 int _FluidInputX;
@@ -25,6 +26,10 @@ RWTexture3D<float3> forceRW;
 Texture3D<float> collision;
 
 RWTexture3D<int> mlh;
+
+RWStructuredBuffer<int> flowersWatered;
+StructuredBuffer<int3> flowersPositions;
+int _flowerCount;
 
 #include "Functions.cginc"
 
@@ -247,13 +252,36 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 8);
 			}
 
-			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther - allowedDiff) // if the current voxel has less volume than its neighbour
+			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther + allowedDiff) // if the current voxel has less volume than its neighbour
 			{
 				// recieve at most 1/8th of the neighbours volume
 				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 8);
-			} 
+			}
 		}
 	}
 
 	densityRW[threadId] = newDensity;
+}
+
+
+[numthreads(1, 1, 1)]
+void CheckFlowers(uint3 threadId : SV_DispatchThreadID)
+{
+	for (int i = 0; i < _flowerCount; i++)
+	{
+		flowersWatered[i] = 0;
+		for (int a = -1; a <= 1; a++)
+		{
+			for (int b = -1; b <= 1; b++)
+			{
+				for (int c = -1; c <= 1; c++)
+				{
+					if (density.Load(int4(flowersPositions[i] + int3(a, b, c), 0)) > 0)
+					{
+						flowersWatered[i] = 1;
+					}
+				}
+			}
+		}
+	}
 }

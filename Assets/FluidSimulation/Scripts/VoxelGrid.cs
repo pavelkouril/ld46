@@ -41,6 +41,7 @@ public class VoxelGrid : MonoBehaviour
     private int _kernelAdvection;
     private int _kernelDiffusion;
     private int _kernelOverflow;
+    private int _kernelCheckFlowers;
 
     private int _kernelMC;
     private int _kernelTripleCount;
@@ -48,6 +49,11 @@ public class VoxelGrid : MonoBehaviour
     // marching cube buffers
     public ComputeBuffer AppendVertexBuffer { get; private set; }
     public ComputeBuffer ArgBuffer { get; private set; }
+
+    public ComputeBuffer FlowersPositions { get; private set; }
+
+    public ComputeBuffer FlowersWatered { get; private set; }
+
 
     private bool _simStarted;
 
@@ -64,6 +70,7 @@ public class VoxelGrid : MonoBehaviour
         _kernelAdvection = Shader.FindKernel("Advection");
         _kernelOverflow = Shader.FindKernel("Overflow");
         _kernelDiffusion = Shader.FindKernel("Diffusion");
+        _kernelCheckFlowers = Shader.FindKernel("CheckFlowers");
         _kernelMC = MarchingCubesShader.FindKernel("MarchingCubes");
         _kernelTripleCount = MarchingCubesShader.FindKernel("TripleCount");
 
@@ -81,6 +88,8 @@ public class VoxelGrid : MonoBehaviour
 
         CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
+
+        var flowers = new List<Vector3>();
 
         for (int x = 0; x < data.Size.x; x++)
         {
@@ -107,9 +116,17 @@ public class VoxelGrid : MonoBehaviour
                     {
                         GrassMask[x + data.Size.x * y] = color.g;
                     }
+                    if (VoxLevelLoader.IsFlower(color))
+                    {
+                        flowers.Add(new Vector3(x, y, z) + Vector3.one);
+                    }
                 }
             }
         }
+
+        FlowersPositions = new ComputeBuffer(flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        FlowersWatered = new ComputeBuffer(flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        Shader.SetInt("_flowerCount", flowers.Count);
 
         AppendVertexBuffer = new ComputeBuffer(Resolution.x * Resolution.y * Resolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         ArgBuffer = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
@@ -397,6 +414,19 @@ public class VoxelGrid : MonoBehaviour
         RenderTexture.ReleaseTemporary(densityTexture);
 
         densityTexture = tempDensity;
+    }
+
+    private void CheckFlowers()
+    {
+        Shader.SetBuffer(_kernelCheckFlowers, "flowersWatered", FlowersWatered);
+        Shader.SetBuffer(_kernelCheckFlowers, "flowersPositions", FlowersPositions);
+
+        Shader.Dispatch(_kernelCheckFlowers, 1, 1, 1);
+
+        AsyncGPUReadback.Request(FlowersWatered, (request) =>
+        {
+            var data = request.GetData<byte>();
+        });
     }
 
     private RenderTexture CreateTemporaryRT(RenderTextureFormat format)

@@ -14,6 +14,9 @@ public class VoxLevelLoader : MonoBehaviour
 
     public static bool IsGrass(Color32 c) => c.r == 0 && c.g != 0 && c.b == 0;
 
+    public static bool IsFlower(Color32 c) => c.r == 255 && c.g == 0 && c.b == 0;
+
+
     private VoxelGrid _grid;
     private Data _inputData;
 
