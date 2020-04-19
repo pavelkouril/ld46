@@ -110,11 +110,11 @@ public class OrbitCamera : MonoBehaviour
             distance = Mathf.Clamp(distance - Input.GetAxis("Mouse ScrollWheel") * 2, distanceMin, distanceMax);
 
             // Perform a raycast between camera and target - in case there is an obstacle - place camera in front of it
-            RaycastHit hit;
+            /*RaycastHit hit;
             if (Physics.Linecast(target.position, transform.position, out hit))
             {
                 distance -= hit.distance;
-            }
+            }*/
 
             // Calculate rotation delta - and set camera position to rotate around target position
             Quaternion rotation = Quaternion.Euler(y, x, 0);

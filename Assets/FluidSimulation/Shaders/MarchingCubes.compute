@@ -324,12 +324,52 @@ static const int triTable[256][16] =
 
 float SampleData(int3 pos) {
 	return clamp(_densityTexture.Load(int4(pos, 0)), 0, 1);
+
+	/*float filtered = 0.0;
+	for (int a = -1; a <= 1; a++)
+	{
+		for (int b = -1; b <= 1; b++)
+		{
+			for (int c = -1; c <= 1; c++)
+			{
+				if ((pos.x + a < 0 || pos.x + a >= _gridSizeX) ||
+					(pos.y + b < 0 || pos.y + b >= _gridSizeY) ||
+					(pos.z + c < 0 || pos.z + c >= _gridSizeZ))
+				{
+					filtered += 0.0;
+				}
+				else
+				{
+					filtered += _densityTexture.Load(int4(pos.x + a, pos.y + b, pos.z + c, 0));
+				}
+			}
+		}
+	}
+	filtered /= 27.0;
+
+	return clamp(filtered, 0.0, 1.0);*/
 }
 
 float SampleLinear(float3 p)
 {
 	// need to mitigate the offset in p[x], so +float3(0.5) to be in [0;1] range
 	return clamp(_densityTexture.SampleLevel(myLinearClampSampler, p + float3(0.5, 0.5, 0.5), 0), 0, 1);
+
+	// Perform 3x3x3 filter for sampling
+	/*float filtered = 0.0;
+	for (int a = -1; a <= 1; a++)
+	{
+		for (int b = -1; b <= 1; b++)
+		{
+			for (int c = -1; c <= 1; c++)
+			{
+				filtered += _densityTexture.SampleLevel(myLinearClampSampler, p + float3(0.5, 0.5, 0.5) + float3(a, b, c), 0);
+			}
+		}
+	}
+	filtered /= 27.0;
+
+	return clamp(filtered, 0.0, 1.0);*/
 }
 
 float3 VertexInterp(float3 p1, float3 p2, float valp1, float valp2)

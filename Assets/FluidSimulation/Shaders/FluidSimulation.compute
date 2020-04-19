@@ -180,14 +180,14 @@ void Advection(uint3 threadId : SV_DispatchThreadID)
 		float localInflow = inflow(threadId, threadId);
 
 		newDensity = netBackflow + localInflow;
-		newVelocity = newDensity > 0 ? (localInflow * localVelocity) / newDensity : float3(0, 0, 0);
-		newForce = newDensity > 0 ? (localInflow * localForce) / newDensity : float3(0, 0, 0);
+		newVelocity = newDensity > 0.05 ? (localInflow * localVelocity) / newDensity : float3(0, 0, 0);
+		newForce = newDensity > 0.05 ? (localInflow * localForce) / newDensity : float3(0, 0, 0);
 	}
 	else
 	{
 		newDensity = netBackflow + netInflow;
-		newVelocity = newDensity > 0 ? netInflowWeightedVelocities / newDensity : float3(0, 0, 0);
-		newForce = newDensity > 0 ? netInflowWeightedForces / newDensity : float3(0, 0, 0);
+		newVelocity = newDensity > 0.05 ? netInflowWeightedVelocities / newDensity : float3(0, 0, 0);
+		newForce = newDensity > 0.05 ? netInflowWeightedForces / newDensity : float3(0, 0, 0);
 	}
 
 	densityRW[threadId] = newDensity;
@@ -227,7 +227,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 	float densityLocal = density.Load(int4(threadId, 0));
 	float rigidbodyLocal = collision.Load(int4(threadId, 0));
 
-	float allowedDiff = 0.0001;
+	float allowedDiff = 0.01;
 
 	int a, c;
 

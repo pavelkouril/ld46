@@ -83,7 +83,7 @@
                 UNITY_APPLY_FOG(i.fogCoord, col);
 				fixed shadow = SHADOW_ATTENUATION(i);
 				//return fixed4(i.tmp, 0.0, 0.0, 1.0);
-				return col * shadow;
+				return col * max(shadow, 0.3);
             }
             ENDCG
         }
@@ -163,7 +163,7 @@
 				UNITY_APPLY_FOG(i.fogCoord, col);
 				fixed shadow = SHADOW_ATTENUATION(i);
 				//return fixed4(shadow, shadow, shadow, col.a);
-				return col * shadow;
+				return col * max(shadow, 0.3);
 			}
 			ENDCG
 		}
