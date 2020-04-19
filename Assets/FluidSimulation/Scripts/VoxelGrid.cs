@@ -25,7 +25,7 @@ public class VoxelGrid : MonoBehaviour
 
     public Mesh TerrainMesh { get; private set; }
 
-    public delegate string TerrainChangedEvt(VoxelGrid grid);
+    public delegate void TerrainChangedEvt(VoxelGrid grid);
 
     public event TerrainChangedEvt OnTerrainChanged;
 
@@ -253,6 +253,8 @@ public class VoxelGrid : MonoBehaviour
 
             _terrainMeshCollider.convex = false;
             _terrainMeshCollider.sharedMesh = _terrainMeshFilter.sharedMesh;
+
+            OnTerrainChanged(this);
         });
     }
 
