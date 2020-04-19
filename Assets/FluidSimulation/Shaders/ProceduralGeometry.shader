@@ -15,8 +15,8 @@
 
 			struct Vertex
 			{
-				float3 vPosition;
-				float3 vNormal;
+				float4 vPosition;
+				float4 vNormal;
 			};
 
 			struct Triangle
@@ -39,7 +39,7 @@
 				uint vid = id % 3;
 
 				v2f o;
-				o.vertex = mul(UNITY_MATRIX_VP, mul(model, float4(triangles[pid].v[vid].vPosition.xyz, 1)));
+				o.vertex = mul(UNITY_MATRIX_VP, mul(model, triangles[pid].v[vid].vPosition));
 				o.normal = mul(unity_ObjectToWorld, triangles[pid].v[vid].vNormal.xyz);
 				return o;
 			}
@@ -47,7 +47,7 @@
 			float4 frag(v2f i) : SV_Target
 			{
 				float d = max(dot(normalize(_WorldSpaceLightPos0.xyz), i.normal), 0);
-			return float4(d, d, d, 1);
+				return float4(d, d, d, 1);
 			}
 			ENDCG
 		}

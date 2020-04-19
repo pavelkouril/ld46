@@ -1,11 +1,14 @@
-﻿#pragma kernel GenerateFluid
+﻿#pragma kernel ResetTextures
+#pragma kernel AddFluid
 #pragma kernel ForceApplication
 #pragma kernel ForcePropagation
 #pragma kernel Advection
 #pragma kernel Overflow
 
 float _deltaTime;
-int3 _FluidInput;
+int _FluidInputX;
+int _FluidInputY;
+int _FluidInputZ;
 
 Texture3D<float> density;
 RWTexture3D<float> densityRW;
@@ -25,11 +28,18 @@ RWTexture3D<int> mlh;
 #include "Functions.cginc"
 
 [numthreads(8, 8, 8)]
-void GenerateFluid(uint3 threadId : SV_DispatchThreadID)
+void ResetTextures(uint3 threadId : SV_DispatchThreadID)
 {
 	densityRW[threadId] = 0;
 	velocityRW[threadId] = float3(0, 0, 0);
 	forceRW[threadId] = float3(0, 0, 0);
+}
+
+[numthreads(1, 1, 1)]
+void AddFluid(uint3 threadId : SV_DispatchThreadID)
+{
+	int3 inputLoc = int3(_FluidInputX, _FluidInputY, _FluidInputZ);
+	densityRW[inputLoc] = densityRW.Load(int4(inputLoc, 0)) + 1;
 }
 
 [numthreads(8, 8, 8)]

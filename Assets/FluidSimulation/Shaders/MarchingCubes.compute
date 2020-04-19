@@ -15,8 +15,8 @@ int _gridSizeZ;
 
 struct Vertex
 {
-	float3 vPosition;
-	float3 vNormal;
+	float4 vPosition;
+	float4 vNormal;
 };
 
 struct Triangle
@@ -347,7 +347,7 @@ float3 VertexInterp(float3 p1, float3 p2, float valp1, float valp2)
 
 float3 CalculateGradient(float3 p)
 {
-	float3 ratio = 1.0 / float3(_gridSizeX, _gridSizeY * 2, _gridSizeZ);
+	float3 ratio = 1.0 / float3(_gridSizeX, _gridSizeY, _gridSizeZ);
 
 	return float3(
 		SampleLinear(p - float3(1.0, 0.0, 0.0) * ratio)
@@ -366,7 +366,7 @@ void MarchingCubes(uint3 threadId : SV_DispatchThreadID)
 {
 	float3 offset = float3(-0.5, -0.5, -0.5);
 
-	int3 _gridSize = int3(_gridSizeX, _gridSizeY * 2, _gridSizeZ) - int3(1, 2, 1);
+	float3 _gridSize = float3(_gridSizeX, _gridSizeY, _gridSizeZ) - 1;
 
 	float3 p[8] = {
 		p[0] = (threadId + float3(0, 0, 1)) / _gridSize + offset,
@@ -436,13 +436,13 @@ void MarchingCubes(uint3 threadId : SV_DispatchThreadID)
 			Vertex v1;
 			Vertex v2;
 
-			v0.vPosition = vertlist[triTable[cubeIndex][i]];
-			v1.vPosition = vertlist[triTable[cubeIndex][i + 1]];
-			v2.vPosition = vertlist[triTable[cubeIndex][i + 2]];
+			v0.vPosition = float4(vertlist[triTable[cubeIndex][i]], 1);
+			v1.vPosition = float4(vertlist[triTable[cubeIndex][i + 1]], 1);
+			v2.vPosition = float4(vertlist[triTable[cubeIndex][i + 2]], 1);
 
-			v0.vNormal = normalize(CalculateGradient(v0.vPosition));
-			v1.vNormal = normalize(CalculateGradient(v1.vPosition));
-			v2.vNormal = normalize(CalculateGradient(v2.vPosition));
+			v0.vNormal = float4(normalize(CalculateGradient(v0.vPosition.xyz)), 0);
+			v1.vNormal = float4(normalize(CalculateGradient(v1.vPosition.xyz)), 0);
+			v2.vNormal = float4(normalize(CalculateGradient(v2.vPosition.xyz)), 0);
 
 			t.v[0] = v0;
 			t.v[1] = v1;

@@ -7,9 +7,9 @@ using UnityEngine;
 /// </summary>
 public class VoxelGrid : MonoBehaviour
 {
-    public Vector3Int Resolution { get; private set; }
+    public float[] CollisionField;
 
-    public int OldResolution => Mathf.Max(Resolution.x, Resolution.y, Resolution.z);
+    public Vector3Int Resolution { get; private set; }
 
     public ComputeShader Shader;
 
@@ -24,7 +24,8 @@ public class VoxelGrid : MonoBehaviour
     private RenderTexture mlhTexture;
 
     // soil and marching cubes compute shaders kernels
-    private int _kernelGenerateFluid;
+    private int _kernelResetTextures;
+    private int _kernelAddFluid;
     private int _kernelCollisionField;
     private int _kernelForceApplication;
     private int _kernelForcePropagation;
@@ -43,7 +44,8 @@ public class VoxelGrid : MonoBehaviour
 
     private void Awake()
     {
-        _kernelGenerateFluid = Shader.FindKernel("GenerateFluid");
+        _kernelResetTextures = Shader.FindKernel("ResetTextures");
+        _kernelAddFluid = Shader.FindKernel("AddFluid");
         _kernelForceApplication = Shader.FindKernel("ForceApplication");
         _kernelForcePropagation = Shader.FindKernel("ForcePropagation");
         _kernelAdvection = Shader.FindKernel("Advection");
@@ -54,7 +56,35 @@ public class VoxelGrid : MonoBehaviour
 
     public void Setup(VoxLevelLoader.Data data)
     {
-        Resolution = data.Size;
+        // make border
+        Resolution = data.Size + new Vector3Int(2, 2, 2);
+
+        CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
+
+        for (int x = 0; x < data.Size.x; x++)
+        {
+            for (int y = 0; y < data.Size.y; y++)
+            {
+                for (int z = 0; z < data.Size.z; z++)
+                {
+                    int flatIndex = x + data.Size.x * (y + data.Size.y * z);
+                    //bytes[flatIndex] = 1;
+
+                    var item = data.Indices[x, y, z];
+                    var color = data.Palette[item].ToColor();
+                    if (VoxLevelLoader.IsTerrain(color))
+                    {
+                        CollisionField[flatIndex] = 1;
+                    }
+                    if (VoxLevelLoader.IsFluidInput(color))
+                    {
+                        Shader.SetInt("_FluidInputX", x + 1);
+                        Shader.SetInt("_FluidInputY", y + 1);
+                        Shader.SetInt("_FluidInputZ", z + 1);
+                    }
+                }
+            }
+        }
 
         AppendVertexBuffer = new ComputeBuffer(Resolution.x * Resolution.y * Resolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         ArgBuffer = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
@@ -68,39 +98,39 @@ public class VoxelGrid : MonoBehaviour
 
         CollisionTexture = new Texture3D(Resolution.x, Resolution.y, Resolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
 
-        var bytes = new float[Resolution.x * Resolution.y * Resolution.z];
+        ToGPUCollisionField();
 
-        Debug.Log(data.Size);
+        ResetTextures();
 
-        for (int x = 0; x < data.Size.x; x++)
+        _fluidGenerated = true;
+    }
+
+    public void ToGPUCollisionField()
+    {
+        var textureData = new float[Resolution.x * Resolution.y * Resolution.z];
+
+        for (int x = 0; x < Resolution.x; x++)
         {
-            for (int y = 0; y < data.Size.y; y++)
+            for (int y = 0; y < Resolution.y; y++)
             {
-                for (int z = 0; z < data.Size.z; z++)
+                for (int z = 0; z < Resolution.z; z++)
                 {
-                    int flatIndex = x + data.Size.x * (y + data.Size.y * z);
-                    bytes[flatIndex] = 1;
-
-                    var item = data.Indices[x, y, z];
-                    if (item != 0)
+                    int flatIndexDst = x + Resolution.x * (y + Resolution.y * z);
+                    if (x == 0 || y == 0 || z == 0 || x == Resolution.x - 1 || y == Resolution.y - 1 || z == Resolution.z - 1)
                     {
-                        var color = data.Palette[item].ToColor();
-
-                        if (VoxLevelLoader.IsTerrain(color))
-                        {
-                            bytes[flatIndex] = 1;
-                        }
+                        textureData[flatIndexDst] = 1;
+                        continue;
                     }
+
+                    // src data is without border, so we need to adjust calc for that
+                    int flatIndexSrc = (x - 1) + (Resolution.x - 2) * ((y - 1) + (Resolution.y - 2) * (z - 1));
+                    textureData[flatIndexDst] = CollisionField[flatIndexSrc];
                 }
             }
         }
 
-        CollisionTexture.SetPixelData(bytes, 0);
+        CollisionTexture.SetPixelData(textureData, 0);
         CollisionTexture.Apply(false, false);
-
-        GenerateFluid();
-
-        _fluidGenerated = true;
     }
 
     /// <summary>
@@ -135,7 +165,7 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetTexture(_kernelMC, "_densityTexture", CollisionTexture);
         AppendVertexBuffer.SetCounterValue(0);
 
-        MarchingCubesShader.Dispatch(_kernelMC, Resolution.x / 8 + 1, Resolution.y / 8 + 1, Resolution.z / 8 + 1);
+        MarchingCubesShader.Dispatch(_kernelMC, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
 
         int[] args = new int[] { 0, 1, 0, 0 };
         ArgBuffer.SetData(args);
@@ -146,18 +176,24 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.Dispatch(_kernelTripleCount, 1, 1, 1);
     }
 
-    private void GenerateFluid()
+    private void ResetTextures()
     {
         densityTexture = CreateTemporaryRT(RenderTextureFormat.RHalf);
         velocityTexture = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
         forceTexture = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
 
-        Shader.SetTexture(_kernelGenerateFluid, "collision", CollisionTexture);
-        Shader.SetTexture(_kernelGenerateFluid, "densityRW", densityTexture);
-        Shader.SetTexture(_kernelGenerateFluid, "velocityRW", velocityTexture);
-        Shader.SetTexture(_kernelGenerateFluid, "forceRW", forceTexture);
+        Shader.SetTexture(_kernelResetTextures, "collision", CollisionTexture);
+        Shader.SetTexture(_kernelResetTextures, "densityRW", densityTexture);
+        Shader.SetTexture(_kernelResetTextures, "velocityRW", velocityTexture);
+        Shader.SetTexture(_kernelResetTextures, "forceRW", forceTexture);
 
-        Shader.Dispatch(_kernelGenerateFluid, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelResetTextures, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+    }
+
+    private void AddFluid()
+    {
+        Shader.SetTexture(_kernelAddFluid, "densityRW", densityTexture);
+        Shader.Dispatch(_kernelAddFluid, 1, 1, 1);
     }
 
     private void ForceApplication()
