@@ -21,7 +21,9 @@ public class VoxelGrid : MonoBehaviour
 
     public byte[] GrassMask { get; private set; }
 
-    public Vector3Int Resolution { get; private set; }
+    public Vector3Int GpuTexturesResolution { get; private set; }
+
+    public Vector3Int GridResolution => GpuTexturesResolution - Vector3Int.one * 2;
 
     public Mesh TerrainMesh { get; private set; }
 
@@ -57,14 +59,15 @@ public class VoxelGrid : MonoBehaviour
 
     // marching cube buffers
     public ComputeBuffer AppendVertexBuffer { get; private set; }
+    public ComputeBuffer AppendVertexBufferTerrain { get; private set; }
     public ComputeBuffer ArgBuffer { get; private set; }
 
     public ComputeBuffer FlowersPositions { get; private set; }
 
     public ComputeBuffer FlowersWatered { get; private set; }
 
-
     private bool _simStarted;
+    private int _remainingFluid = 15;
 
     private MeshFilter _terrainMeshFilter;
     private MeshRenderer _terrainMeshRenderer;
@@ -85,16 +88,18 @@ public class VoxelGrid : MonoBehaviour
 
         _terrainMeshFilter = gameObject.AddComponent<MeshFilter>();
         TerrainMesh = new Mesh();
-        _terrainMeshFilter.sharedMesh = new Mesh();
+        _terrainMeshFilter.sharedMesh = TerrainMesh;
         _terrainMeshRenderer = gameObject.AddComponent<MeshRenderer>();
         _terrainMeshRenderer.sharedMaterial = _terrainMaterial;
         _terrainMeshCollider = gameObject.AddComponent<MeshCollider>();
+        _terrainMeshCollider.convex = false;
+        _terrainMeshCollider.sharedMesh = TerrainMesh;
     }
 
     public void Setup(VoxLevelLoader.Data data)
     {
         // make border
-        Resolution = data.Size + new Vector3Int(2, 2, 2);
+        GpuTexturesResolution = data.Size + new Vector3Int(2, 2, 2);
 
         transform.localScale = new Vector3(data.Size.x / 10f, data.Size.y / 10f, data.Size.z / 10f);
 
@@ -140,29 +145,46 @@ public class VoxelGrid : MonoBehaviour
         FlowersWatered = new ComputeBuffer(flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
         Shader.SetInt("_flowerCount", flowers.Count);
 
-        AppendVertexBuffer = new ComputeBuffer(Resolution.x * Resolution.y * Resolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
+        AppendVertexBuffer = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
+        AppendVertexBufferTerrain = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         ArgBuffer = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
 
-        MarchingCubesShader.SetInt("_gridSizeX", Resolution.x);
-        MarchingCubesShader.SetInt("_gridSizeY", Resolution.y);
-        MarchingCubesShader.SetInt("_gridSizeZ", Resolution.z);
+        MarchingCubesShader.SetInt("_gridSizeX", GpuTexturesResolution.x);
+        MarchingCubesShader.SetInt("_gridSizeY", GpuTexturesResolution.y);
+        MarchingCubesShader.SetInt("_gridSizeZ", GpuTexturesResolution.z);
         MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
-        MarchingCubesShader.SetBuffer(_kernelMC, "triangleRW", AppendVertexBuffer);
-
-        CollisionTexture = new Texture3D(Resolution.x, Resolution.y, Resolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
+        CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
 
         ToGPUCollisionField();
 
-
         ResetTextures();
+    }
 
-        _simStarted = true;
+    private int Vector3IntPosToLinearized(Vector3Int pos)
+    {
+        return pos.x + GridResolution.x * (pos.y + GridResolution.y * pos.z);
     }
 
     public void RemoveTerrain(Vector3Int position)
     {
         // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
+        for (int i = -1; i <= 1; i++)
+        {
+            for (int j = -1; j <= 0; j++)
+            {
+                for (int k = -1; k <= 1; k++)
+                {
+                    var newPos = position + new Vector3Int(i, j, k);
+                    if (newPos.x <= 0 || newPos.x >= GridResolution.x - 1 || newPos.y <= 0 || newPos.y >= GridResolution.y - 1 || newPos.z <= 0 || newPos.z >= GridResolution.z - 1)
+                    {
+                        continue;
+                    }
+
+                    CollisionField[Vector3IntPosToLinearized(newPos)] = 0;
+                }
+            }
+        }
 
         // regenerate collision field
         ToGPUCollisionField();
@@ -170,30 +192,30 @@ public class VoxelGrid : MonoBehaviour
 
     public void ToGPUCollisionField()
     {
-        var textureData = new float[Resolution.x * Resolution.y * Resolution.z];
+        var textureData = new float[GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z];
 
-        for (int x = 0; x < Resolution.x; x++)
+        for (int x = 0; x < GpuTexturesResolution.x; x++)
         {
-            for (int y = 0; y < Resolution.y; y++)
+            for (int y = 0; y < GpuTexturesResolution.y; y++)
             {
-                for (int z = 0; z < Resolution.z; z++)
+                for (int z = 0; z < GpuTexturesResolution.z; z++)
                 {
-                    int flatIndexDst = x + Resolution.x * (y + Resolution.y * z);
-                    if (x == 0 || y == 0 || z == 0 || x == Resolution.x - 1 || y == Resolution.y - 1 || z == Resolution.z - 1)
+                    int flatIndexDst = x + GpuTexturesResolution.x * (y + GpuTexturesResolution.y * z);
+                    if (x == 0 || y == 0 || z == 0 || x == GpuTexturesResolution.x - 1 || y == GpuTexturesResolution.y - 1 || z == GpuTexturesResolution.z - 1)
                     {
                         textureData[flatIndexDst] = 1;
                         continue;
                     }
 
                     // src data is without border, so we need to adjust calc for that
-                    int flatIndexSrc = (x - 1) + (Resolution.x - 2) * ((y - 1) + (Resolution.y - 2) * (z - 1));
+                    int flatIndexSrc = (x - 1) + GridResolution.x * ((y - 1) + GridResolution.y * (z - 1));
                     textureData[flatIndexDst] = CollisionField[flatIndexSrc];
                 }
             }
         }
 
         CollisionTexture.SetPixelData(textureData, 0);
-        CollisionTexture.Apply(false, true);
+        CollisionTexture.Apply(false, false);
 
         // and also get new mesh from the GPU to replace the current one
         ComputeCollisionFieldMesh();
@@ -201,25 +223,25 @@ public class VoxelGrid : MonoBehaviour
 
     public void ComputeCollisionFieldMesh()
     {
-        var terrainTexture = new Texture3D(Resolution.x, Resolution.y, Resolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
+        var terrainTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
 
-        var textureData = new float[Resolution.x * Resolution.y * Resolution.z];
+        var textureData = new float[GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z];
 
-        for (int x = 0; x < Resolution.x; x++)
+        for (int x = 0; x < GpuTexturesResolution.x; x++)
         {
-            for (int y = 0; y < Resolution.y; y++)
+            for (int y = 0; y < GpuTexturesResolution.y; y++)
             {
-                for (int z = 0; z < Resolution.z; z++)
+                for (int z = 0; z < GpuTexturesResolution.z; z++)
                 {
-                    int flatIndexDst = x + Resolution.x * (y + Resolution.y * z);
-                    if (x == 0 || y == 0 || z == 0 || x == Resolution.x - 1 || y == Resolution.y - 1 || z == Resolution.z - 1)
+                    int flatIndexDst = x + GpuTexturesResolution.x * (y + GpuTexturesResolution.y * z);
+                    if (x == 0 || y == 0 || z == 0 || x == GpuTexturesResolution.x - 1 || y == GpuTexturesResolution.y - 1 || z == GpuTexturesResolution.z - 1)
                     {
                         // textureData[flatIndexDst] = 1;
                         continue;
                     }
 
                     // src data is without border, so we need to adjust calc for that
-                    int flatIndexSrc = (x - 1) + (Resolution.x - 2) * ((y - 1) + (Resolution.y - 2) * (z - 1));
+                    int flatIndexSrc = (x - 1) + (GpuTexturesResolution.x - 2) * ((y - 1) + (GpuTexturesResolution.y - 2) * (z - 1));
                     textureData[flatIndexDst] = CollisionField[flatIndexSrc];
                 }
             }
@@ -228,16 +250,16 @@ public class VoxelGrid : MonoBehaviour
         terrainTexture.SetPixelData(textureData, 0);
         terrainTexture.Apply(false, true);
 
-        MarchingCubes(terrainTexture);
+        MarchingCubes(terrainTexture, AppendVertexBufferTerrain);
 
         // slow af but idgaf now
         int[] args = new int[] { 0, 1, 0, 0 };
         ArgBuffer.SetData(args);
-        ComputeBuffer.CopyCount(AppendVertexBuffer, ArgBuffer, 0);
+        ComputeBuffer.CopyCount(AppendVertexBufferTerrain, ArgBuffer, 0);
         ArgBuffer.GetData(args);
         int triCount = args[0] * 3;
 
-        AsyncGPUReadback.Request(AppendVertexBuffer, (request) =>
+        AsyncGPUReadback.Request(AppendVertexBufferTerrain, (request) =>
         {
             Vector3[] vert = new Vector3[triCount * 3];
             Vector3[] normals = new Vector3[triCount * 3];
@@ -249,14 +271,18 @@ public class VoxelGrid : MonoBehaviour
                 normals[i] = data[i].vNormal;
                 tris[i] = i;
             }
-            _terrainMeshFilter.sharedMesh.vertices = vert;
-            _terrainMeshFilter.sharedMesh.normals = normals;
-            _terrainMeshFilter.sharedMesh.triangles = tris;
 
-            _terrainMeshCollider.convex = false;
-            _terrainMeshCollider.sharedMesh = _terrainMeshFilter.sharedMesh;
+            TerrainMesh.Clear();
+            TerrainMesh.MarkDynamic();
+            TerrainMesh.vertices = vert;
+            TerrainMesh.normals = normals;
+            TerrainMesh.triangles = tris;
 
-            OnTerrainChanged(this);
+            TerrainMesh.UploadMeshData(false);
+
+            _terrainMeshCollider.sharedMesh = TerrainMesh;
+
+            OnTerrainChanged?.Invoke(this);
         });
     }
 
@@ -288,16 +314,38 @@ public class VoxelGrid : MonoBehaviour
 
         Diffusion();
 
-        MarchingCubes(densityTexture);
+        MarchingCubes(densityTexture, AppendVertexBuffer);
         FixArgBuffer();
     }
 
-    private void MarchingCubes(Texture dataTex)
+    private void Update()
     {
-        MarchingCubesShader.SetTexture(_kernelMC, "_densityTexture", dataTex);
-        AppendVertexBuffer.SetCounterValue(0);
+        if (Input.GetMouseButtonUp(0))
+        {
+            Debug.Log("click");
 
-        MarchingCubesShader.Dispatch(_kernelMC, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                var pos = (hit.point - transform.position + (transform.localScale / 2)) * 10;
+                Debug.Log(pos);
+                RemoveTerrain(new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z)));
+            }
+        }
+
+        if (Input.GetKeyUp(KeyCode.P))
+        {
+            _simStarted = true;
+        }
+    }
+
+    private void MarchingCubes(Texture dataTex, ComputeBuffer vertexBuffer)
+    {
+        MarchingCubesShader.SetBuffer(_kernelMC, "triangleRW", vertexBuffer);
+        MarchingCubesShader.SetTexture(_kernelMC, "_densityTexture", dataTex);
+        vertexBuffer.SetCounterValue(0);
+
+        MarchingCubesShader.Dispatch(_kernelMC, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
 
 
         MarchingCubesShader.SetBuffer(_kernelTripleCount, "argBuffer", ArgBuffer);
@@ -325,11 +373,16 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelResetTextures, "velocityRW", velocityTexture);
         Shader.SetTexture(_kernelResetTextures, "forceRW", forceTexture);
 
-        Shader.Dispatch(_kernelResetTextures, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelResetTextures, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
     }
 
     private void AddFluid()
     {
+        if (_remainingFluid <= 0)
+        {
+            return;
+        }
+        _remainingFluid--;
         Shader.SetTexture(_kernelAddFluid, "densityRW", densityTexture);
         Shader.Dispatch(_kernelAddFluid, 1, 1, 1);
     }
@@ -344,7 +397,7 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelForceApplication, "density", densityTexture);
         Shader.SetTexture(_kernelForceApplication, "collision", CollisionTexture);
 
-        Shader.Dispatch(_kernelForceApplication, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelForceApplication, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
 
         RenderTexture.ReleaseTemporary(forceTexture);
         forceTexture = tempForce;
@@ -364,7 +417,7 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelForcePropagation, "velocityRW", tempVelocity);
         Shader.SetTexture(_kernelForcePropagation, "collision", CollisionTexture);
 
-        Shader.Dispatch(_kernelForcePropagation, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelForcePropagation, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
 
         RenderTexture.ReleaseTemporary(forceTexture);
         RenderTexture.ReleaseTemporary(densityTexture);
@@ -389,7 +442,7 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelAdvection, "velocityRW", tempVelocity);
         Shader.SetTexture(_kernelAdvection, "collision", CollisionTexture);
 
-        Shader.Dispatch(_kernelAdvection, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelAdvection, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
 
         RenderTexture.ReleaseTemporary(forceTexture);
         RenderTexture.ReleaseTemporary(densityTexture);
@@ -408,7 +461,7 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelOverflow, "density", densityTexture);
         Shader.SetTexture(_kernelOverflow, "densityRW", tempDensity);
 
-        Shader.Dispatch(_kernelOverflow, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelOverflow, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
 
         RenderTexture.ReleaseTemporary(densityTexture);
 
@@ -423,7 +476,7 @@ public class VoxelGrid : MonoBehaviour
         Shader.SetTexture(_kernelDiffusion, "collision", CollisionTexture);
         Shader.SetTexture(_kernelDiffusion, "densityRW", tempDensity);
 
-        Shader.Dispatch(_kernelDiffusion, Resolution.x / 8, 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelDiffusion, GpuTexturesResolution.x / 8, 8, GpuTexturesResolution.z / 8);
 
         RenderTexture.ReleaseTemporary(densityTexture);
 
@@ -445,9 +498,9 @@ public class VoxelGrid : MonoBehaviour
 
     private RenderTexture CreateTemporaryRT(RenderTextureFormat format)
     {
-        var temp = RenderTexture.GetTemporary(Resolution.x, Resolution.y, 0, format);
+        var temp = RenderTexture.GetTemporary(GpuTexturesResolution.x, GpuTexturesResolution.y, 0, format);
         temp.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-        temp.volumeDepth = Resolution.z;
+        temp.volumeDepth = GpuTexturesResolution.z;
         temp.enableRandomWrite = true;
         temp.Create();
         return temp;

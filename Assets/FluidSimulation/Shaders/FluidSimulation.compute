@@ -252,7 +252,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 8);
 			}
 
-			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther + allowedDiff) // if the current voxel has less volume than its neighbour
+			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther - allowedDiff) // if the current voxel has less volume than its neighbour
 			{
 				// recieve at most 1/8th of the neighbours volume
 				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 8);
