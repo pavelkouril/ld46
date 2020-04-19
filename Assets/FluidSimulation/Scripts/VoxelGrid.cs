@@ -96,6 +96,8 @@ public class VoxelGrid : MonoBehaviour
         // make border
         Resolution = data.Size + new Vector3Int(2, 2, 2);
 
+        transform.localScale = new Vector3(Resolution.x / 10f, Resolution.y / 10f, Resolution.z / 10f);
+
         CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
 
