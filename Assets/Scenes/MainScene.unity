@@ -152,6 +152,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3fbbc9693e94274196b4546be3b77fb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _terrainMaterial: {fileID: 0}
   Shader: {fileID: 7200000, guid: b9f14d8074bbbc44db6e2f4947ce4f2a, type: 3}
   MarchingCubesShader: {fileID: 7200000, guid: 4eeb2041db2c27041a5e6f3ea600e82a, type: 3}
 --- !u!4 &139884094
