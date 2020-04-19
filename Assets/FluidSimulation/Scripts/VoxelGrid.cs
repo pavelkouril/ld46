@@ -126,7 +126,7 @@ public class VoxelGrid : MonoBehaviour
                     }
                     if (VoxLevelLoader.IsGrass(color))
                     {
-                        GrassMask[x + data.Size.x * y] = color.g;
+                        GrassMask[x + data.Size.x * z] = color.g;
                     }
                     if (VoxLevelLoader.IsFlower(color))
                     {
@@ -250,7 +250,7 @@ public class VoxelGrid : MonoBehaviour
                 tris[i] = i;
             }
             _terrainMeshFilter.sharedMesh.vertices = vert;
-            _terrainMeshFilter.sharedMesh.normals = vert;
+            _terrainMeshFilter.sharedMesh.normals = normals;
             _terrainMeshFilter.sharedMesh.triangles = tris;
 
             _terrainMeshCollider.convex = false;

@@ -10,6 +10,7 @@
 		_Size("Instance Size", float) = 1.0
 		_Position("Instance Size", Vector) = (0.0, 0.0, 0.0, 0.0)
 		_SizeCutoff("Instance Size Cutout", float) = 0.3
+		_OffsetFactor("Height Offset Factor", float) = 1.0
     }
     SubShader
     {
@@ -47,6 +48,7 @@
 			uniform fixed _Size;
 			uniform float4 _Position;
 			uniform fixed _SizeCutoff;
+			uniform float _OffsetFactor;
 
             v2f vert (appdata_base v)
             {
@@ -63,7 +65,7 @@
 				{
 					vertex.w = 0.0;
 				}
-				vertex.z += height * 0.01;
+				vertex.z += height * _OffsetFactor;
 
                 v2f o;
 				o.tmp = size;
@@ -130,6 +132,7 @@
 			uniform fixed _Size;
 			uniform float4 _Position;
 			uniform fixed _SizeCutoff;
+			uniform float _OffsetFactor;
 
 			v2f vert(appdata_base v)
 			{
@@ -146,7 +149,7 @@
 				{
 					vertex.w = 0.0;
 				}
-				vertex.z += height * 0.01;
+				vertex.z += height * _OffsetFactor;
 
 				v2f o;
 				o.tmp = size;
@@ -197,6 +200,7 @@
 			uniform fixed _Size;
 			uniform float4 _Position;
 			uniform fixed _SizeCutoff;
+			uniform float _OffsetFactor;
 
 			struct v2f {
 				V2F_SHADOW_CASTER;
@@ -215,7 +219,7 @@
 				v.vertex.x = v.vertex.x + v.vertex.z * noise * 0.2;
 				v.vertex.y = v.vertex.y + v.vertex.z * noise * 0.2;
 				v.vertex.z *= size;
-				v.vertex.z += height * 0.01;
+				v.vertex.z += height * _OffsetFactor;
 
 				v2f o;
 				o.tmp = size;

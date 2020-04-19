@@ -14,6 +14,8 @@ public class GrassTile : MonoBehaviour
     [Range(0.0F, 1.0f)]
     public float _InstanceSizeCutout = 0.1f;
 
+    public Texture2D _MaskTex;
+
     public Texture2D _HeightMap;
     public int _HeightMapSize = 64;
 
@@ -54,6 +56,22 @@ public class GrassTile : MonoBehaviour
 
         _HeightMap.SetPixelData<float>(data, 0);
         _HeightMap.Apply();
+
+        int maskWidth = grid.Resolution.x - 2;
+        _MaskTex = new Texture2D(maskWidth, maskWidth, TextureFormat.RFloat, false);
+
+        float[] maskData = new float[maskWidth * maskWidth];
+
+        for (int j = 0; j < maskWidth; j++)
+        {
+            for (int i = 0; i < maskWidth; i++)
+            {
+                maskData[i + j * maskWidth] = (float)(grid.GrassMask[i + j * maskWidth]) / 255.0f;
+            }
+        }
+
+        _MaskTex.SetPixelData<float>(maskData, 0);
+        _MaskTex.Apply();
     }
 
     // Start is called before the first frame update
@@ -61,8 +79,6 @@ public class GrassTile : MonoBehaviour
     {
         _renderer = GetComponent<Renderer>();
         _HeightMap = new Texture2D(_HeightMapSize, _HeightMapSize, TextureFormat.RFloat, false);
-
-        UpdateHeightmap(null);
 
         _Grid.OnTerrainChanged += UpdateHeightmap;
     }
@@ -74,6 +90,8 @@ public class GrassTile : MonoBehaviour
         _renderer.material.SetFloat("_Size", _InstanceSize);
         _renderer.material.SetVector("_Position", new Vector4(_InstanceOffset.x, _InstanceOffset.y, 0.0f, 0.0f));
         _renderer.material.SetFloat("_SizeCutoff", _InstanceSizeCutout);
+        _renderer.material.SetFloat("_OffsetFactor", 1.0f / transform.localScale.x);
         _renderer.material.SetTexture("_HeightTex", _HeightMap);
+        _renderer.material.SetTexture("_MaskTex", _MaskTex);
     }
 }
