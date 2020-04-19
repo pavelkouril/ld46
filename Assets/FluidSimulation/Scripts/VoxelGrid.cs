@@ -17,9 +17,9 @@ public class VoxelGrid : MonoBehaviour
     [SerializeField]
     private Material _terrainMaterial;
 
-    public float[] CollisionField;
+    public float[] CollisionField { get; private set; }
 
-    public byte[] GrassMask;
+    public byte[] GrassMask { get; private set; }
 
     public Vector3Int Resolution { get; private set; }
 
@@ -96,7 +96,7 @@ public class VoxelGrid : MonoBehaviour
         // make border
         Resolution = data.Size + new Vector3Int(2, 2, 2);
 
-        transform.localScale = new Vector3(Resolution.x / 10f, Resolution.y / 10f, Resolution.z / 10f);
+        transform.localScale = new Vector3(data.Size.x / 10f, data.Size.y / 10f, data.Size.z / 10f);
 
         CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
