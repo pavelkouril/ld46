@@ -1,12 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// The class taking care of the sand simulation and its rendering
 /// </summary>
 public class VoxelGrid : MonoBehaviour
 {
+    public struct Vertex
+    {
+        public Vector4 vPosition;
+        public Vector4 vNormal;
+    };
+
     public float[] CollisionField;
 
     public Vector3Int Resolution { get; private set; }
@@ -30,7 +37,7 @@ public class VoxelGrid : MonoBehaviour
     private int _kernelForceApplication;
     private int _kernelForcePropagation;
     private int _kernelAdvection;
-    private int _kernelSoilSlippage;
+    private int _kernelDiffusion;
     private int _kernelOverflow;
 
     private int _kernelMC;
@@ -40,7 +47,10 @@ public class VoxelGrid : MonoBehaviour
     public ComputeBuffer AppendVertexBuffer { get; private set; }
     public ComputeBuffer ArgBuffer { get; private set; }
 
-    private bool _fluidGenerated;
+    private bool _simStarted;
+
+    private MeshFilter _terrainMeshFilter;
+    private MeshRenderer _terrainMeshRenderer;
 
     private void Awake()
     {
@@ -50,8 +60,14 @@ public class VoxelGrid : MonoBehaviour
         _kernelForcePropagation = Shader.FindKernel("ForcePropagation");
         _kernelAdvection = Shader.FindKernel("Advection");
         _kernelOverflow = Shader.FindKernel("Overflow");
+        _kernelDiffusion = Shader.FindKernel("Diffusion");
         _kernelMC = MarchingCubesShader.FindKernel("MarchingCubes");
         _kernelTripleCount = MarchingCubesShader.FindKernel("TripleCount");
+
+        _terrainMeshFilter = gameObject.AddComponent<MeshFilter>();
+        _terrainMeshFilter.sharedMesh = new Mesh();
+        _terrainMeshRenderer = gameObject.AddComponent<MeshRenderer>();
+        _terrainMeshRenderer.sharedMaterial = new Material(UnityEngine.Shader.Find("Standard"));
     }
 
     public void Setup(VoxLevelLoader.Data data)
@@ -92,7 +108,7 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetInt("_gridSizeX", Resolution.x);
         MarchingCubesShader.SetInt("_gridSizeY", Resolution.y);
         MarchingCubesShader.SetInt("_gridSizeZ", Resolution.z);
-        MarchingCubesShader.SetFloat("_isoLevel", 0.5f);
+        MarchingCubesShader.SetFloat("_isoLevel", 0.1f);
 
         MarchingCubesShader.SetBuffer(_kernelMC, "triangleRW", AppendVertexBuffer);
 
@@ -100,9 +116,11 @@ public class VoxelGrid : MonoBehaviour
 
         ToGPUCollisionField();
 
+        ComputeCollisionFieldMesh();
+
         ResetTextures();
 
-        _fluidGenerated = true;
+        _simStarted = true;
     }
 
     public void ToGPUCollisionField()
@@ -130,7 +148,63 @@ public class VoxelGrid : MonoBehaviour
         }
 
         CollisionTexture.SetPixelData(textureData, 0);
-        CollisionTexture.Apply(false, false);
+        CollisionTexture.Apply(false, true);
+    }
+
+    public void ComputeCollisionFieldMesh()
+    {
+        var terrainTexture = new Texture3D(Resolution.x, Resolution.y, Resolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
+
+        var textureData = new float[Resolution.x * Resolution.y * Resolution.z];
+
+        for (int x = 0; x < Resolution.x; x++)
+        {
+            for (int y = 0; y < Resolution.y; y++)
+            {
+                for (int z = 0; z < Resolution.z; z++)
+                {
+                    int flatIndexDst = x + Resolution.x * (y + Resolution.y * z);
+                    if (x == 0 || y == 0 || z == 0 || x == Resolution.x - 1 || y == Resolution.y - 1 || z == Resolution.z - 1)
+                    {
+                        // textureData[flatIndexDst] = 1;
+                        continue;
+                    }
+
+                    // src data is without border, so we need to adjust calc for that
+                    int flatIndexSrc = (x - 1) + (Resolution.x - 2) * ((y - 1) + (Resolution.y - 2) * (z - 1));
+                    textureData[flatIndexDst] = CollisionField[flatIndexSrc];
+                }
+            }
+        }
+
+        terrainTexture.SetPixelData(textureData, 0);
+        terrainTexture.Apply(false, true);
+
+        MarchingCubes(terrainTexture);
+
+        // slow af but idgaf now
+        int[] args = new int[] { 0, 1, 0, 0 };
+        ArgBuffer.SetData(args);
+        ComputeBuffer.CopyCount(AppendVertexBuffer, ArgBuffer, 0);
+        ArgBuffer.GetData(args);
+        int triCount = args[0] * 3;
+
+        AsyncGPUReadback.Request(AppendVertexBuffer, (request) =>
+        {
+            Vector3[] vert = new Vector3[triCount * 3];
+            Vector3[] normals = new Vector3[triCount * 3];
+            int[] tris = new int[triCount * 3];
+            var data = request.GetData<Vertex>();
+            for (int i = 0; i < triCount * 3; i++)
+            {
+                vert[i] = data[i].vPosition;
+                normals[i] = data[i].vNormal;
+                tris[i] = i;
+            }
+            _terrainMeshFilter.sharedMesh.vertices = vert;
+            _terrainMeshFilter.sharedMesh.normals = vert;
+            _terrainMeshFilter.sharedMesh.triangles = tris;
+        });
     }
 
     /// <summary>
@@ -139,11 +213,13 @@ public class VoxelGrid : MonoBehaviour
     private void FixedUpdate()
     {
         Shader.SetFloat("_deltaTime", Time.fixedDeltaTime);
-        if (!_fluidGenerated)
+        if (!_simStarted)
         {
             return;
         }
-        /*
+
+        AddFluid();
+        
         ForceApplication();
         for (var i = 0; i < 4; i++)
         {
@@ -156,22 +232,31 @@ public class VoxelGrid : MonoBehaviour
         {
             Overflow();
         }
-        */
-        MarchingCubes();
+
+        Diffusion();
+        
+        MarchingCubes(densityTexture);
+        FixArgBuffer();
     }
 
-    private void MarchingCubes()
+    private void MarchingCubes(Texture dataTex)
     {
-        MarchingCubesShader.SetTexture(_kernelMC, "_densityTexture", CollisionTexture);
+        MarchingCubesShader.SetTexture(_kernelMC, "_densityTexture", dataTex);
         AppendVertexBuffer.SetCounterValue(0);
 
         MarchingCubesShader.Dispatch(_kernelMC, Resolution.x / 8, Resolution.y / 8, Resolution.z / 8);
 
+
+        MarchingCubesShader.SetBuffer(_kernelTripleCount, "argBuffer", ArgBuffer);
+        MarchingCubesShader.Dispatch(_kernelTripleCount, 1, 1, 1);
+    }
+
+    private void FixArgBuffer()
+    {
         int[] args = new int[] { 0, 1, 0, 0 };
         ArgBuffer.SetData(args);
 
         ComputeBuffer.CopyCount(AppendVertexBuffer, ArgBuffer, 0);
-
         MarchingCubesShader.SetBuffer(_kernelTripleCount, "argBuffer", ArgBuffer);
         MarchingCubesShader.Dispatch(_kernelTripleCount, 1, 1, 1);
     }
@@ -277,15 +362,15 @@ public class VoxelGrid : MonoBehaviour
         densityTexture = tempDensity;
     }
 
-    private void SoilSlippage()
+    private void Diffusion()
     {
         var tempDensity = CreateTemporaryRT(RenderTextureFormat.RFloat);
 
-        Shader.SetTexture(_kernelSoilSlippage, "density", densityTexture);
-        Shader.SetTexture(_kernelSoilSlippage, "collision", CollisionTexture);
-        Shader.SetTexture(_kernelSoilSlippage, "densityRW", tempDensity);
+        Shader.SetTexture(_kernelDiffusion, "density", densityTexture);
+        Shader.SetTexture(_kernelDiffusion, "collision", CollisionTexture);
+        Shader.SetTexture(_kernelDiffusion, "densityRW", tempDensity);
 
-        Shader.Dispatch(_kernelSoilSlippage, Resolution.x / 8, 8, Resolution.z / 8);
+        Shader.Dispatch(_kernelDiffusion, Resolution.x / 8, 8, Resolution.z / 8);
 
         RenderTexture.ReleaseTemporary(densityTexture);
 

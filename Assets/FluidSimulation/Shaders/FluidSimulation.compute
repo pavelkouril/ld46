@@ -4,6 +4,7 @@
 #pragma kernel ForcePropagation
 #pragma kernel Advection
 #pragma kernel Overflow
+#pragma kernel Diffusion
 
 float _deltaTime;
 int _FluidInputX;
@@ -211,5 +212,48 @@ void Overflow(uint3 threadId : SV_DispatchThreadID)
 	{
 		newDensity += clamp(densityDown + rigidbodyDown - 1, 0, densityDown);
 	}
+	densityRW[threadId] = newDensity;
+}
+
+[numthreads(8, 8, 8)]
+void Diffusion(uint3 threadId : SV_DispatchThreadID)
+{
+	// load all 3 voxels in this column
+	float densityLocal = density.Load(int4(threadId, 0));
+	float rigidbodyLocal = collision.Load(int4(threadId, 0));
+
+	float allowedDiff = 0.0001;
+
+	int a, c;
+
+	float newDensity = densityLocal;
+
+	for (a = -1; a <= 1; a++)
+	{
+		for (c = -1; c <= 1; c++)
+		{
+			if (a == 0 && c == 0)
+			{
+				continue;
+			}
+
+			// load the voxels in the other column
+			float densityOther = density.Load(int4(threadId + int3(a, 0, c), 0));
+			float rigidbodyOther = collision.Load(int4(threadId + int3(a, 0, c), 0));
+
+			if (densityLocal + rigidbodyLocal > densityOther + rigidbodyOther - allowedDiff) // if the current voxel has more volume than its neighbouur
+			{
+				// transfer at most 1/8th of your volume
+				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 8);
+			}
+
+			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther - allowedDiff) // if the current voxel has less volume than its neighbour
+			{
+				// recieve at most 1/8th of the neighbours volume
+				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 8);
+			} 
+		}
+	}
+
 	densityRW[threadId] = newDensity;
 }
