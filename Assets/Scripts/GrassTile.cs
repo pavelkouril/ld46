@@ -57,16 +57,15 @@ public class GrassTile : MonoBehaviour
         _HeightMap.SetPixelData<float>(data, 0);
         _HeightMap.Apply();
 
-        int maskWidth = grid.Resolution.x - 2;
-        _MaskTex = new Texture2D(maskWidth, maskWidth, TextureFormat.RFloat, false);
+        _MaskTex = new Texture2D(grid.GridResolution.x, grid.GridResolution.y, TextureFormat.RFloat, false);
 
-        float[] maskData = new float[maskWidth * maskWidth];
+        float[] maskData = new float[grid.GridResolution.x * grid.GridResolution.y];
 
-        for (int j = 0; j < maskWidth; j++)
+        for (int j = 0; j < grid.GridResolution.x; j++)
         {
-            for (int i = 0; i < maskWidth; i++)
+            for (int i = 0; i < grid.GridResolution.y; i++)
             {
-                maskData[i + j * maskWidth] = (float)(grid.GrassMask[i + j * maskWidth]) / 255.0f;
+                maskData[i + j * grid.GridResolution.x] = (float)(grid.GrassMask[i + j * grid.GridResolution.x]) / 255.0f;
             }
         }
 
