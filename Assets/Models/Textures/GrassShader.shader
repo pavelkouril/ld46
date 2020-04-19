@@ -5,6 +5,7 @@
         _MainTex ("Texture", 2D) = "white" {}
 		_MaskTex("Texture", 2D) = "white" {}
 		_NoiseTex("Texture", 2D) = "white" {}
+		_HeightTex("Texture", 2D) = "black" {}
 		_AlphaCutoff("Cutoff", float) = 0.95
 		_Size("Instance Size", float) = 1.0
 		_Position("Instance Size", Vector) = (0.0, 0.0, 0.0, 0.0)
@@ -37,19 +38,21 @@
 				float tmp : TEXCOORD3;
             };
 
-			sampler2D _MainTex;
-			sampler2D _MaskTex;
-			sampler2D _NoiseTex;
-            float4 _MainTex_ST;
-			fixed _AlphaCutoff;
-			fixed _Size;
-			float4 _Position;
-			fixed _SizeCutoff;
+			uniform sampler2D _MainTex;
+			uniform sampler2D _MaskTex;
+			uniform sampler2D _NoiseTex;
+			uniform sampler2D _HeightTex;
+			uniform float4 _MainTex_ST;
+			uniform fixed _AlphaCutoff;
+			uniform fixed _Size;
+			uniform float4 _Position;
+			uniform fixed _SizeCutoff;
 
             v2f vert (appdata_base v)
             {
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
+				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				float4 vertex = v.vertex;
@@ -60,6 +63,7 @@
 				{
 					vertex.w = 0.0;
 				}
+				vertex.z += height * 0.01;
 
                 v2f o;
 				o.tmp = size;
@@ -117,19 +121,21 @@
 					float tmp : TEXCOORD3;
 			};
 
-			sampler2D _MainTex;
-			sampler2D _MaskTex;
-			sampler2D _NoiseTex;
-			float4 _MainTex_ST;
-			fixed _AlphaCutoff;
-			fixed _Size;
-			float4 _Position;
-			fixed _SizeCutoff;
+			uniform sampler2D _MainTex;
+			uniform sampler2D _MaskTex;
+			uniform sampler2D _NoiseTex;
+			uniform sampler2D _HeightTex;
+			uniform float4 _MainTex_ST;
+			uniform fixed _AlphaCutoff;
+			uniform fixed _Size;
+			uniform float4 _Position;
+			uniform fixed _SizeCutoff;
 
 			v2f vert(appdata_base v)
 			{
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
+				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				float4 vertex = v.vertex;
@@ -140,6 +146,7 @@
 				{
 					vertex.w = 0.0;
 				}
+				vertex.z += height * 0.01;
 
 				v2f o;
 				o.tmp = size;
@@ -181,14 +188,15 @@
 			#pragma multi_compile_instancing // allow instanced shadow pass for most of the shaders
 			#include "UnityCG.cginc"
 
-			sampler2D _MaskTex;
-			sampler2D _MainTex;
-			sampler2D _NoiseTex;
-			float4 _MainTex_ST;
-			fixed _AlphaCutoff;
-			fixed _Size;
-			float4 _Position;
-			fixed _SizeCutoff;
+			uniform sampler2D _MaskTex;
+			uniform sampler2D _MainTex;
+			uniform sampler2D _NoiseTex;
+			uniform sampler2D _HeightTex;
+			uniform float4 _MainTex_ST;
+			uniform fixed _AlphaCutoff;
+			uniform fixed _Size;
+			uniform float4 _Position;
+			uniform fixed _SizeCutoff;
 
 			struct v2f {
 				V2F_SHADOW_CASTER;
@@ -201,11 +209,13 @@
 			{
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
+				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				v.vertex.x = v.vertex.x + v.vertex.z * noise * 0.2;
 				v.vertex.y = v.vertex.y + v.vertex.z * noise * 0.2;
 				v.vertex.z *= size;
+				v.vertex.z += height * 0.01;
 
 				v2f o;
 				o.tmp = size;
