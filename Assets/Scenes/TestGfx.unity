@@ -536,7 +536,7 @@ MonoBehaviour:
   _Cutoff: 0.55
   _InstanceSize: 5
   _InstanceOffset: {x: 0, y: 0}
-  _InstanceSizeCutout: 0.5
+  _InstanceSizeCutout: 0.084
   _MaskTex: {fileID: 0}
   _HeightMap: {fileID: 0}
   _HeightMapSize: 64
