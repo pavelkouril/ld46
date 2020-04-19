@@ -8,9 +8,11 @@ using CsharpVoxReader.Chunks;
 
 public class VoxLevelLoader : MonoBehaviour
 {
-    public static bool IsTerrain(Color32 c) => (c.r == 0 && c.b == 0 && c.g != 0) || (c.r == 100 && c.g == 50 && c.b == 0);
+    public static bool IsTerrain(Color32 c) => IsGrass(c) || (c.r == 100 && c.g == 50 && c.b == 0);
 
     public static bool IsFluidInput(Color32 c) => c.r == 0 && c.g == 0 && c.b == 255;
+
+    public static bool IsGrass(Color32 c) => c.r == 0 && c.g != 0 && c.b == 0;
 
     private VoxelGrid _grid;
     private Data _inputData;

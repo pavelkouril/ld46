@@ -16,6 +16,8 @@ public class VoxelGrid : MonoBehaviour
 
     public float[] CollisionField;
 
+    public byte[] GrassMask;
+
     public Vector3Int Resolution { get; private set; }
 
     public ComputeShader Shader;
@@ -51,6 +53,7 @@ public class VoxelGrid : MonoBehaviour
 
     private MeshFilter _terrainMeshFilter;
     private MeshRenderer _terrainMeshRenderer;
+    private MeshCollider _terrainMeshCollider;
 
     private void Awake()
     {
@@ -68,6 +71,7 @@ public class VoxelGrid : MonoBehaviour
         _terrainMeshFilter.sharedMesh = new Mesh();
         _terrainMeshRenderer = gameObject.AddComponent<MeshRenderer>();
         _terrainMeshRenderer.sharedMaterial = new Material(UnityEngine.Shader.Find("Standard"));
+        _terrainMeshCollider = gameObject.AddComponent<MeshCollider>();
     }
 
     public void Setup(VoxLevelLoader.Data data)
@@ -76,6 +80,7 @@ public class VoxelGrid : MonoBehaviour
         Resolution = data.Size + new Vector3Int(2, 2, 2);
 
         CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
+        GrassMask = new byte[data.Size.x * data.Size.y];
 
         for (int x = 0; x < data.Size.x; x++)
         {
@@ -98,6 +103,10 @@ public class VoxelGrid : MonoBehaviour
                         Shader.SetInt("_FluidInputY", y + 1);
                         Shader.SetInt("_FluidInputZ", z + 1);
                     }
+                    if (VoxLevelLoader.IsGrass(color))
+                    {
+                        GrassMask[x + data.Size.x * y] = color.g;
+                    }
                 }
             }
         }
@@ -108,7 +117,7 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetInt("_gridSizeX", Resolution.x);
         MarchingCubesShader.SetInt("_gridSizeY", Resolution.y);
         MarchingCubesShader.SetInt("_gridSizeZ", Resolution.z);
-        MarchingCubesShader.SetFloat("_isoLevel", 0.1f);
+        MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
         MarchingCubesShader.SetBuffer(_kernelMC, "triangleRW", AppendVertexBuffer);
 
@@ -116,11 +125,18 @@ public class VoxelGrid : MonoBehaviour
 
         ToGPUCollisionField();
 
-        ComputeCollisionFieldMesh();
 
         ResetTextures();
 
         _simStarted = true;
+    }
+
+    public void RemoveTerrain(Vector3Int position)
+    {
+        // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
+
+        // regenerate collision field
+        ToGPUCollisionField();
     }
 
     public void ToGPUCollisionField()
@@ -149,6 +165,9 @@ public class VoxelGrid : MonoBehaviour
 
         CollisionTexture.SetPixelData(textureData, 0);
         CollisionTexture.Apply(false, true);
+
+        // and also get new mesh from the GPU to replace the current one
+        ComputeCollisionFieldMesh();
     }
 
     public void ComputeCollisionFieldMesh()
@@ -204,6 +223,9 @@ public class VoxelGrid : MonoBehaviour
             _terrainMeshFilter.sharedMesh.vertices = vert;
             _terrainMeshFilter.sharedMesh.normals = vert;
             _terrainMeshFilter.sharedMesh.triangles = tris;
+
+            _terrainMeshCollider.convex = false;
+            _terrainMeshCollider.sharedMesh = _terrainMeshFilter.sharedMesh;
         });
     }
 
@@ -219,7 +241,7 @@ public class VoxelGrid : MonoBehaviour
         }
 
         AddFluid();
-        
+
         ForceApplication();
         for (var i = 0; i < 4; i++)
         {
@@ -234,7 +256,7 @@ public class VoxelGrid : MonoBehaviour
         }
 
         Diffusion();
-        
+
         MarchingCubes(densityTexture);
         FixArgBuffer();
     }
