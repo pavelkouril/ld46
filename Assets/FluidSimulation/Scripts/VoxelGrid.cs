@@ -322,13 +322,10 @@ public class VoxelGrid : MonoBehaviour
     {
         if (Input.GetMouseButtonUp(0))
         {
-            Debug.Log("click");
-
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
                 var pos = (hit.point - transform.position + (transform.localScale / 2)) * 10;
-                Debug.Log(pos);
                 RemoveTerrain(new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z)));
             }
         }
