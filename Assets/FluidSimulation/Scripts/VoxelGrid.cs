@@ -40,6 +40,8 @@ public class VoxelGrid : MonoBehaviour
 
     public ComputeShader MarchingCubesShader;
 
+    public ReflectionProbe _Probe;
+
     // the render textures used to hold the voxel values
     private RenderTexture densityTexture;
     private RenderTexture velocityTexture;
@@ -348,6 +350,8 @@ public class VoxelGrid : MonoBehaviour
             _terrainMeshCollider.sharedMesh = TerrainMesh;
 
             OnTerrainChanged?.Invoke(this);
+
+            _Probe.RenderProbe();
         });
     }
 

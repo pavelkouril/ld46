@@ -23,9 +23,16 @@ public class GrassTile : MonoBehaviour
 
     private Renderer _renderer;
 
+    private bool firstRun = false;
+
+    private float[] data;
+
     public void UpdateHeightmap(VoxelGrid grid)
     {
-        float[] data = new float[_HeightMapSize * _HeightMapSize];
+        if (data == null)
+        {
+            data = new float[_HeightMapSize * _HeightMapSize];
+        }
 
         Vector3 basePoint = transform.position;
 
@@ -34,6 +41,9 @@ public class GrassTile : MonoBehaviour
         basePoint.y += 10.0f;
 
         float step = _InstanceSize / _HeightMapSize;
+
+        float avg = 0.0f;
+        float avgSamples = 0.0f;
 
         for (int j = 0; j < _HeightMapSize; j++)
         {
@@ -46,12 +56,38 @@ public class GrassTile : MonoBehaviour
                 if (Physics.Raycast(new Ray(origin, direction), out testResult))
                 {
                     data[i + j * _HeightMapSize] = origin.y - testResult.distance;
+                    if (!firstRun)
+                    {
+                        avg += data[i + j * _HeightMapSize];
+                        avgSamples += 1.0f;
+                    }
                 }
                 else
                 {
-                    data[i + j * _HeightMapSize] = 0.0f;
+                    if (!firstRun)
+                    {
+                        data[i + j * _HeightMapSize] = 99999.9f;
+                    }
                 }
             }
+        }
+
+        if (!firstRun)
+        {
+            avg /= avgSamples;
+
+            for (int j = 0; j < _HeightMapSize; j++)
+            {
+                for (int i = 0; i < _HeightMapSize; i++)
+                {
+                    if (data[i + j * _HeightMapSize] > 100.0f)
+                    {
+                        data[i + j * _HeightMapSize] = avg - 0.1f;
+                    }
+                }
+            }
+
+            firstRun = true;
         }
 
         _HeightMap.SetPixelData<float>(data, 0);
