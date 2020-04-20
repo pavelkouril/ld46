@@ -71,7 +71,11 @@ public class VoxelGrid : MonoBehaviour
 
     private bool _simStarted;
     //private int _remainingFluid = 15;
-    private int _remainingFluid = 250;
+    public int _remainingFluid;
+    public int _remainigTerraform;
+
+    private int _remainigTerraformCurr;
+
 
     private MeshFilter _terrainMeshFilter;
     private MeshRenderer _terrainMeshRenderer;
@@ -87,6 +91,8 @@ public class VoxelGrid : MonoBehaviour
 
     [SerializeField]
     private GameObject _arrow;
+
+    public Text remainTerraformText;
 
     private void Awake()
     {
@@ -192,6 +198,8 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
         CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
+        _remainigTerraformCurr = _remainigTerraform;
+        remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
 
         ToGPUCollisionField();
 
@@ -205,6 +213,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void RemoveTerrain(Vector3Int position)
     {
+        bool changed = false;
         // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
         for (int i = -1; i <= 1; i++)
         {
@@ -223,11 +232,17 @@ public class VoxelGrid : MonoBehaviour
                     {
                         continue;
                     }
-
+                    changed = true;
                     CollisionField[Vector3IntPosToLinearized(newPos)] = 0;
                     GrassMask[newPos.x + GridResolution.x * newPos.z] = 0;
                 }
             }
+        }
+
+        if (changed)
+        {
+            _remainigTerraformCurr--;
+            remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
         }
 
         // regenerate collision field
@@ -236,6 +251,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void AddTerrain(Vector3Int position)
     {
+        bool changed = false;
         // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
         for (int i = -1; i <= 1; i++)
         {
@@ -253,13 +269,20 @@ public class VoxelGrid : MonoBehaviour
                     {
                         continue;
                     }
+                    changed = true;
 
                     CollisionField[Vector3IntPosToLinearized(newPos)] = 1;
                     GrassMask[newPos.x + GridResolution.x * newPos.z] = 0;
+
                 }
             }
         }
 
+        if (changed)
+        {
+            _remainigTerraformCurr--;
+            remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
+        }
         // regenerate collision field
         ToGPUCollisionField();
     }
@@ -405,6 +428,8 @@ public class VoxelGrid : MonoBehaviour
 
     public void ResetGrid()
     {
+        _remainigTerraformCurr = _remainigTerraform;
+
         foreach (var f in Flowers)
         {
             GameObject.Destroy(f.gameObject);
@@ -437,7 +462,7 @@ public class VoxelGrid : MonoBehaviour
             return;
         }
 
-        if (Input.GetMouseButtonUp(0))
+        if (Input.GetMouseButtonUp(0) && _remainigTerraformCurr > 0)
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit))
