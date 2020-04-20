@@ -97,6 +97,7 @@ public class VoxelGrid : MonoBehaviour
     public Text remainTerraformText;
 
     public AudioClip _clip;
+    public AudioClip _buttonClip;
 
     public Button digbutton;
 
@@ -424,23 +425,28 @@ public class VoxelGrid : MonoBehaviour
 
     public void StartWater()
     {
+        AudioSource.PlayClipAtPoint(_buttonClip, Vector3.zero);
         _simStarted = true;
         digbutton.gameObject.SetActive(false);
     }
 
     public void ToggleLmbMode()
     {
+        AudioSource.PlayClipAtPoint(_buttonClip, Vector3.zero);
         _shouldDig = !_shouldDig;
         _lmbModeText.text = _shouldDig ? "DIG" : "ADD";
     }
 
     public void Quit()
     {
+        AudioSource.PlayClipAtPoint(_buttonClip, Vector3.zero);
         Application.Quit(0);
     }
 
     public void ResetGrid()
     {
+        AudioSource.PlayClipAtPoint(_buttonClip, Vector3.zero);
+
         _simStarted = false;
         digbutton.gameObject.SetActive(true);
         _remainigFluidCurr = _remainingFluid;
