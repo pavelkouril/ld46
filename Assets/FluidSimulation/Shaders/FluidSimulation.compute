@@ -143,9 +143,9 @@ void Advection(uint3 threadId : SV_DispatchThreadID)
 
 	for (a = -1; a <= 1; a++)
 	{
-		for (b = -1; b <= 1; b++)
+		for (c = -1; c <= 1; c++)
 		{
-			for (c = -1; c <= 1; c++)
+			for (b = -1; b <= 1; b++)
 			{
 				float amount = inflow(threadId, threadId + int3(a, b, c)); // compute how much fluid is received
 				netInflow += amount;
@@ -158,9 +158,9 @@ void Advection(uint3 threadId : SV_DispatchThreadID)
 	float netBackflow = 0;
 	for (a = -1; a <= 1; a++)
 	{
-		for (b = -1; b <= 1; b++)
+		for (c = -1; c <= 1; c++)
 		{
-			for (c = -1; c <= 1; c++)
+			for (b = -1; b <= 1; b++)
 			{
 				netBackflow += backflow(threadId, threadId + int3(a, b, c)); // compute how much fluid is returned due to locked voxels
 			}
@@ -232,7 +232,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 	int a, c;
 
 	float newDensity = densityLocal;
-
+	
 	for (a = -1; a <= 1; a++)
 	{
 		for (c = -1; c <= 1; c++)

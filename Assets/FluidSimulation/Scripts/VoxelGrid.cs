@@ -67,7 +67,8 @@ public class VoxelGrid : MonoBehaviour
     public ComputeBuffer FlowersWatered { get; private set; }
 
     private bool _simStarted;
-    private int _remainingFluid = 15;
+    //private int _remainingFluid = 15;
+    private int _remainingFluid = 250;
 
     private MeshFilter _terrainMeshFilter;
     private MeshRenderer _terrainMeshRenderer;
