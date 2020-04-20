@@ -95,7 +95,7 @@
             ENDCG
         }
 
-		Pass
+		/*Pass
 		{
 			ZWrite off
 			Blend SrcAlpha OneMinusSrcAlpha
@@ -178,7 +178,7 @@
 				return col * max(shadow, 0.3);
 			}
 			ENDCG
-		}
+		}*/
 
 		Pass
 		{
