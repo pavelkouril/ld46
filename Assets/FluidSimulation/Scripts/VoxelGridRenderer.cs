@@ -16,7 +16,7 @@ public class VoxelGridRenderer : MonoBehaviour
     public ReflectionProbe _Probe;
 
     [Header("Internal")]
-    private RenderTexture _RefractionRT = null;
+    public RenderTexture _RefractionRT = null;
     private Camera _RefractionCamera = null;
 
     private bool _IsRendering = false;

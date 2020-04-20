@@ -150,6 +150,7 @@ public class VoxelGrid : MonoBehaviour
                         var go = GameObject.Instantiate(_arrow);
                         go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
                         go.transform.position = new Vector3(x, y, z) * 0.1f - transform.position - transform.localScale / 2.0f;
+                        go.GetComponentInChildren<ArrowScript>()._Renderer = GetComponent<VoxelGridRenderer>();
 
                         CollisionField[flatIndex] = 0;
                     }
