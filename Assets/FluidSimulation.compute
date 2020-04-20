@@ -162,7 +162,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 				continue;
 			}
 
-			for (	 a = -1; a <= 1; a++)
+			for (a = -1; a <= 1; a++)
 			{
 				for (int c = -1; c <= 1; c++)
 				{
@@ -226,18 +226,22 @@ void CheckFlowers(uint3 threadId : SV_DispatchThreadID)
 			continue;
 		}
 
+		float total = 0;
+
 		for (int a = -2; a <= 2; a++)
 		{
 			for (int b = -2; b <= 2; b++)
 			{
 				for (int c = -2; c <= 2; c++)
 				{
-					if (density.Load(int4(flowersPositions[i] + int3(a, b, c), 0)) > 0)
-					{
-						flowersWatered[i] = 1;
-					}
+					total += density.Load(int4(flowersPositions[i] + int3(a, b, c), 0));
 				}
 			}
+		} 
+
+		if (total > 0.1)
+		{
+			flowersWatered[i] = 1;
 		}
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -75,6 +76,7 @@ public class VoxelGrid : MonoBehaviour
     public int _remainigTerraform;
 
     private int _remainigTerraformCurr;
+    private int _remainigFluidCurr;
 
 
     private MeshFilter _terrainMeshFilter;
@@ -199,6 +201,7 @@ public class VoxelGrid : MonoBehaviour
 
         CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
         _remainigTerraformCurr = _remainigTerraform;
+        _remainigFluidCurr = _remainingFluid;
         remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
 
         ToGPUCollisionField();
@@ -428,6 +431,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void ResetGrid()
     {
+        _remainigFluidCurr = _remainingFluid;
         _remainigTerraformCurr = _remainigTerraform;
 
         foreach (var f in Flowers)
@@ -514,11 +518,11 @@ public class VoxelGrid : MonoBehaviour
 
     private void AddFluid()
     {
-        if (_remainingFluid <= 0)
+        if (_remainigFluidCurr <= 0)
         {
             return;
         }
-        _remainingFluid--;
+        _remainigFluidCurr--;
         Shader.SetTexture(_kernelAddFluid, "collision", CollisionTexture);
         Shader.SetTexture(_kernelAddFluid, "densityRW", densityTexture);
 
@@ -582,7 +586,7 @@ public class VoxelGrid : MonoBehaviour
 
             if (areAllDone)
             {
-                _victoryScreen.SetActive(true);
+                StartVicScreen();
             }
         }
 
@@ -593,6 +597,24 @@ public class VoxelGrid : MonoBehaviour
         Shader.Dispatch(_kernelCheckFlowers, 1, 1, 1);
 
         _flowersRequest = AsyncGPUReadback.Request(FlowersWateredBuffer);
+    }
+
+    private bool _isRunning;
+
+    internal void StartVicScreen()
+    {
+        if (!_isRunning)
+        {
+            _isRunning = true;
+            StartCoroutine(Trans());
+        }
+    }
+
+    private IEnumerator Trans()
+    {
+        yield return new WaitForSeconds(2f);
+        _victoryScreen.SetActive(true);
+
     }
 
     private RenderTexture CreateTemporaryRT()
