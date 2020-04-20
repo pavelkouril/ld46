@@ -441,6 +441,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void ResetGrid()
     {
+        _simStarted = false;
         digbutton.gameObject.SetActive(true);
         _remainigFluidCurr = _remainingFluid;
         _remainigTerraformCurr = _remainigTerraform;
