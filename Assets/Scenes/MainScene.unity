@@ -361,7 +361,7 @@ MonoBehaviour:
   Shader: {fileID: 7200000, guid: b9f14d8074bbbc44db6e2f4947ce4f2a, type: 3}
   MarchingCubesShader: {fileID: 7200000, guid: 4eeb2041db2c27041a5e6f3ea600e82a, type: 3}
   _Probe: {fileID: 467179895}
-  _remainingFluid: 75
+  _remainingFluid: 5
   _remainigTerraform: 25
   _lmbModeText: {fileID: 869064056}
   _victoryScreen: {fileID: 833184883}
@@ -409,6 +409,7 @@ MonoBehaviour:
   _TextureSize: 512
   _Camera: {fileID: 282840813}
   _Probe: {fileID: 467179895}
+  _RefractionRT: {fileID: 0}
 --- !u!1 &162946079
 GameObject:
   m_ObjectHideFlags: 0
@@ -694,13 +695,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 282840810}
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalRotation: {x: 0.23911735, y: -0.3696433, z: 0.099045366, w: 0.89239943}
+  m_LocalPosition: {x: 2.5, y: -0, z: -2.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 30.000002, y: -45.000004, z: 0}
 --- !u!114 &282840815
 MonoBehaviour:
   m_ObjectHideFlags: 0
