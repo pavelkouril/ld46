@@ -189,6 +189,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void RemoveTerrain(Vector3Int position)
     {
+        Debug.Log(position);
         // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
         for (int i = -1; i <= 1; i++)
         {
@@ -197,12 +198,13 @@ public class VoxelGrid : MonoBehaviour
                 for (int k = -1; k <= 1; k++)
                 {
                     var newPos = position + new Vector3Int(i, j, k);
+
                     if (newPos.x <= 0 || newPos.x >= GridResolution.x - 1 || newPos.y <= 0 || newPos.y >= GridResolution.y - 1 || newPos.z <= 0 || newPos.z >= GridResolution.z - 1)
                     {
                         continue;
                     }
 
-                    if (Flowers.Any(p => p.x == newPos.x && p.z == newPos.z))
+                    if (Flowers.Any(p => (p.x >= newPos.x - 1 && p.x <= newPos.x + 1) && (p.z >= newPos.z - 1 && p.z <= newPos.z + 1)))
                     {
                         continue;
                     }
