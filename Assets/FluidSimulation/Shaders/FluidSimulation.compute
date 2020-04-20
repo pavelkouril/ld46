@@ -103,8 +103,9 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 		{
 			int3 loc = int3(x, y, z);
 			float densityDown = density.Load(int4(loc + uint3(0, -1, 0), 0));
+			float collisionDown = collision.Load(int4(loc + uint3(0, -1, 0), 0));
 
-			if (densityDown < 1)
+			if (densityDown + collisionDown < 1)
 			{
 				continue;
 			}
@@ -121,7 +122,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 			}
 			else if (dir == 1)
 			{
-				dirOne = -1; 
+				dirOne = -1;
 				dirTwo = 1;
 			}
 			else if (dir == 2)
@@ -136,6 +137,8 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 			}
 			dir++;
 			dir = dir % 4;
+
+			int maxNeighbours = 0;
 
 			for (int a = -1; a <= 1; a++)
 			{
@@ -153,7 +156,33 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 
 					if (current > neighbour && neighbour < 1)
 					{
-						float toTransfer = clamp(densityCurrent / 5, 0, 1 - neighbour);
+						maxNeighbours++;
+					}
+				}
+			}
+
+			if (maxNeighbours == 0)
+			{
+				continue;
+			}
+
+			for (int a = -1; a <= 1; a++)
+			{
+				for (int c = -1; c <= 1; c++)
+				{
+					if (a == c)
+					{
+						continue;
+					}
+
+					int3 neighbourLoc = loc + int3(dirOne * a, 0, dirTwo * c);
+					float densityNeighbour = densityRW.Load(int4(neighbourLoc, 0));
+					float collisionNeighbour = collision.Load(int4(neighbourLoc, 0));
+					float neighbour = densityNeighbour + collisionNeighbour;
+
+					if (current > neighbour && neighbour < 1)
+					{
+						float toTransfer = clamp(densityCurrent / maxNeighbours, 0, 1 - neighbour);
 						densityRW[neighbourLoc] = densityNeighbour + toTransfer;
 						densityCurrent -= toTransfer;
 					}
