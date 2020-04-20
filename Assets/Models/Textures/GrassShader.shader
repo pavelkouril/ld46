@@ -72,7 +72,7 @@
 				o.tmp = size;
                 o.pos = UnityObjectToClipPos(vertex);
                 o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
-                UNITY_TRANSFER_FOG(o,o.vertex);
+                UNITY_TRANSFER_FOG(o,vertex);
 				TRANSFER_SHADOW(o)
                 return o;
             }
@@ -157,7 +157,7 @@
 				o.tmp = size;
 				o.pos = UnityObjectToClipPos(vertex);
 				o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
-				UNITY_TRANSFER_FOG(o, o.vertex);
+				UNITY_TRANSFER_FOG(o, vertex);
 				TRANSFER_SHADOW(o)
 					return o;
 			}

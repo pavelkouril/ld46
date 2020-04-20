@@ -17,6 +17,9 @@ public class VoxelGrid : MonoBehaviour
 
     [SerializeField]
     private Material _terrainMaterial;
+    
+    [SerializeField]
+    private GameObject _objectiveFlower;
 
     public float[] CollisionField { get; private set; }
 
@@ -62,6 +65,7 @@ public class VoxelGrid : MonoBehaviour
     public ComputeBuffer AppendVertexBuffer { get; private set; }
     public ComputeBuffer AppendVertexBufferTerrain { get; private set; }
     public ComputeBuffer ArgBuffer { get; private set; }
+    public ComputeBuffer ArgBufferTerrain { get; private set; }
 
     public ComputeBuffer FlowersPositionsBuffer { get; private set; }
 
@@ -153,6 +157,7 @@ public class VoxelGrid : MonoBehaviour
         AppendVertexBuffer = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         AppendVertexBufferTerrain = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         ArgBuffer = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
+        ArgBufferTerrain = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
 
         MarchingCubesShader.SetInt("_gridSizeX", GpuTexturesResolution.x);
         MarchingCubesShader.SetInt("_gridSizeY", GpuTexturesResolution.y);
@@ -163,8 +168,7 @@ public class VoxelGrid : MonoBehaviour
 
         foreach (var f in Flowers)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
+            var go = GameObject.Instantiate(_objectiveFlower);
             go.transform.position = f * 0.1f - transform.position - transform.localScale / 2.0f;
         }
 
@@ -272,9 +276,9 @@ public class VoxelGrid : MonoBehaviour
 
         // slow af but idgaf now
         int[] args = new int[] { 0, 1, 0, 0 };
-        ArgBuffer.SetData(args);
-        ComputeBuffer.CopyCount(AppendVertexBufferTerrain, ArgBuffer, 0);
-        ArgBuffer.GetData(args);
+        ArgBufferTerrain.SetData(args);
+        ComputeBuffer.CopyCount(AppendVertexBufferTerrain, ArgBufferTerrain, 0);
+        ArgBufferTerrain.GetData(args);
         int triCount = args[0] * 3;
 
         AsyncGPUReadback.Request(AppendVertexBufferTerrain, (request) =>
