@@ -80,8 +80,13 @@ public class VoxelGrid : MonoBehaviour
     private bool _shouldDig = true;
     [SerializeField]
     private Text _lmbModeText;
+    [SerializeField]
+    private GameObject _victoryScreen;
 
     private AsyncGPUReadbackRequest _flowersRequest;
+
+    [SerializeField]
+    private GameObject _arrow;
 
     private void Awake()
     {
@@ -104,8 +109,12 @@ public class VoxelGrid : MonoBehaviour
         _terrainMeshCollider.sharedMesh = TerrainMesh;
     }
 
+    private VoxLevelLoader.Data _levelData;
+
     public void Setup(VoxLevelLoader.Data data)
     {
+        _levelData = data;
+
         // make border
         GpuTexturesResolution = data.Size + new Vector3Int(2, 2, 2);
 
@@ -115,7 +124,7 @@ public class VoxelGrid : MonoBehaviour
         GrassMask = new byte[data.Size.x * data.Size.y];
 
         Flowers = new List<FlowerObjective>();
-        var FlowerPos = new List<Vector3>();
+        var FlowerPos = new List<Vector3Int>();
 
         for (int x = 0; x < data.Size.x; x++)
         {
@@ -138,7 +147,7 @@ public class VoxelGrid : MonoBehaviour
                         Shader.SetInt("_FluidInputY", y + 1);
                         Shader.SetInt("_FluidInputZ", z + 1);
 
-                        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        var go = GameObject.Instantiate(_arrow);
                         go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
                         go.transform.position = new Vector3(x, y, z) * 0.1f - transform.position - transform.localScale / 2.0f;
 
@@ -150,10 +159,10 @@ public class VoxelGrid : MonoBehaviour
                     }
                     if (VoxLevelLoader.IsFlower(color))
                     {
-                        var f = new Vector3(x, y, z) + Vector3.one;
+                        var f = new Vector3Int(x, y, z) + Vector3Int.one;
                         FlowerPos.Add(f);
                         var go = GameObject.Instantiate(_objectiveFlower);
-                        go.transform.position = f * 0.1f - transform.position - transform.localScale / 2.0f;
+                        go.transform.position = new Vector3(f.x, f.y, f.z) * 0.1f - transform.position - transform.localScale / 2.0f;
                         var flow = go.GetComponent<FlowerObjective>();
                         flow.GridPos = new Vector3(x, y, z);
                         Flowers.Add(flow);
@@ -162,7 +171,7 @@ public class VoxelGrid : MonoBehaviour
             }
         }
 
-        FlowersPositionsBuffer = new ComputeBuffer(Flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        FlowersPositionsBuffer = new ComputeBuffer(Flowers.Count, sizeof(int) * 3, ComputeBufferType.Structured);
         FlowersPositionsBuffer.SetData(FlowerPos);
         FlowersWateredBuffer = new ComputeBuffer(Flowers.Count, sizeof(int), ComputeBufferType.Structured);
         FlowersWateredBuffer.SetData(new int[Flowers.Count]);
@@ -195,7 +204,6 @@ public class VoxelGrid : MonoBehaviour
 
     public void RemoveTerrain(Vector3Int position)
     {
-        Debug.Log(position);
         // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
         for (int i = -1; i <= 1; i++)
         {
@@ -389,8 +397,45 @@ public class VoxelGrid : MonoBehaviour
         _lmbModeText.text = _shouldDig ? "DIG" : "ADD";
     }
 
+    public void Quit()
+    {
+        Application.Quit(0);
+    }
+
+    public void ResetGrid()
+    {
+        foreach (var f in Flowers)
+        {
+            GameObject.Destroy(f.gameObject);
+        }
+
+        Flowers.Clear();
+
+        AppendVertexBuffer.Release();
+        ArgBuffer.Release();
+        ArgBufferTerrain.Release();
+        AppendVertexBufferTerrain.Release();
+        FlowersWateredBuffer.Release();
+        FlowersPositionsBuffer.Release();
+
+        Setup(_levelData);
+    }
+
     private void Update()
     {
+        if (_victoryScreen.activeInHierarchy)
+        {
+            if (Input.GetKeyUp(KeyCode.Escape))
+            {
+                Quit();
+            }
+        }
+
+        if (_simStarted)
+        {
+            return;
+        }
+
         if (Input.GetMouseButtonUp(0))
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -487,6 +532,7 @@ public class VoxelGrid : MonoBehaviour
 
     private void CheckFlowers()
     {
+
         if (!_flowersRequest.done)
         {
             return;
@@ -494,6 +540,7 @@ public class VoxelGrid : MonoBehaviour
 
         if (!_flowersRequest.hasError)
         {
+            bool areAllDone = true;
             var flowersWatered = _flowersRequest.GetData<int>();
             for (int i = 0; i < Flowers.Count; i++)
             {
@@ -501,6 +548,15 @@ public class VoxelGrid : MonoBehaviour
                 {
                     Flowers[i].StartTransition();
                 }
+                else
+                {
+                    areAllDone = false;
+                }
+            }
+
+            if (areAllDone)
+            {
+                _victoryScreen.SetActive(true);
             }
         }
 

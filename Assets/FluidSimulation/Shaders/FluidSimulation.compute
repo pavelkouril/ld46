@@ -162,7 +162,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 				continue;
 			}
 
-			for (int a = -1; a <= 1; a++)
+			for (	 a = -1; a <= 1; a++)
 			{
 				for (int c = -1; c <= 1; c++)
 				{
@@ -191,7 +191,6 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 	}
 }
 
-
 [numthreads(8, 1, 8)]
 void Overflow(uint3 threadId : SV_DispatchThreadID)
 {
@@ -215,28 +214,6 @@ void Overflow(uint3 threadId : SV_DispatchThreadID)
 
 		densityRW[loc] = densityCurrent;
 	}
-
-	/*
-	float densityLocal = density.Load(int4(threadId, 0));
-	float rigidbodyLocal = collision.Load(int4(threadId, 0));
-	float densityDown = density.Load(int4(threadId + int3(0, -1, 0), 0));
-	float rigidbodyDown = collision.Load(int4(threadId + int3(0, -1, 0), 0));
-	float densityUp = density.Load(int4(threadId + int3(0, 1, 0), 0));
-	float rigidbodyUp = collision.Load(int4(threadId + int3(0, 1, 0), 0));
-
-	float newdensity = densityLocal;
-
-	// transfer as much as possible not to be overflown
-	if (densityLocal + rigidbodyLocal > 1 && rigidbodyUp < 1)
-	{
-		newdensity = clamp(1 - rigidbodyLocal, 0, densityLocal);
-	}
-	// receive density from bottom voxel
-	if (densityDown + rigidbodyDown > 1 && rigidbodyLocal < 1)
-	{
-		newdensity += clamp(densityDown + rigidbodyDown - 1, 0, densityDown);
-	}
-	densityRW[threadId] = newdensity;*/
 }
 
 [numthreads(1, 1, 1)]

@@ -21,7 +21,6 @@ public class FlowerObjective : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        int i = 0;
         foreach (Transform child in transform)
         {
             Flower f = child.gameObject.GetComponent<Flower>();
