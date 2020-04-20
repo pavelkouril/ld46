@@ -96,6 +96,8 @@ public class VoxelGrid : MonoBehaviour
 
     public Text remainTerraformText;
 
+    public AudioClip _clip;
+
     private void Awake()
     {
         _kernelResetTextures = Shader.FindKernel("ResetTextures");
@@ -119,7 +121,7 @@ public class VoxelGrid : MonoBehaviour
 
     private VoxLevelLoader.Data _levelData;
 
-    public void Setup(VoxLevelLoader.Data data)
+    public void Setup(VoxLevelLoader.Data data, bool spawnArrow = true)
     {
         _levelData = data;
 
@@ -155,10 +157,13 @@ public class VoxelGrid : MonoBehaviour
                         Shader.SetInt("_FluidInputY", y + 1);
                         Shader.SetInt("_FluidInputZ", z + 1);
 
-                        var go = GameObject.Instantiate(_arrow);
-                        go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
-                        go.transform.position = new Vector3(x, y, z) * 0.1f - transform.position - transform.localScale / 2.0f;
-                        go.GetComponentInChildren<ArrowScript>()._Renderer = GetComponent<VoxelGridRenderer>();
+                        if (spawnArrow)
+                        {
+                            var go = GameObject.Instantiate(_arrow);
+                            go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
+                            go.transform.position = new Vector3(x, y, z) * 0.1f - transform.position - transform.localScale / 2.0f;
+                            go.GetComponentInChildren<ArrowScript>()._Renderer = GetComponent<VoxelGridRenderer>();
+                        }
 
                         CollisionField[flatIndex] = 0;
                     }
@@ -246,6 +251,7 @@ public class VoxelGrid : MonoBehaviour
         {
             _remainigTerraformCurr--;
             remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
+            AudioSource.PlayClipAtPoint(_clip, Vector3.zero);
         }
 
         // regenerate collision field
@@ -285,6 +291,7 @@ public class VoxelGrid : MonoBehaviour
         {
             _remainigTerraformCurr--;
             remainTerraformText.text = "REMAINING TERRAFORMS " + _remainigTerraformCurr;
+            AudioSource.PlayClipAtPoint(_clip, Vector3.zero);
         }
         // regenerate collision field
         ToGPUCollisionField();
@@ -448,7 +455,7 @@ public class VoxelGrid : MonoBehaviour
         FlowersWateredBuffer.Release();
         FlowersPositionsBuffer.Release();
 
-        Setup(_levelData);
+        Setup(_levelData, false);
     }
 
     private void Update()
