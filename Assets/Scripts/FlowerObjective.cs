@@ -36,16 +36,22 @@ public class FlowerObjective : MonoBehaviour
         }
     }
 
+    private bool _isRunning;
+
     internal void StartTransition()
     {
-        StartCoroutine(Trans());
+        if (!_isRunning)
+        {
+            _isRunning = true;
+            StartCoroutine(Trans());
+        }
     }
 
     private IEnumerator Trans()
     {
         while (_ObjectiveProgress < 1)
         {
-            _ObjectiveProgress += Time.deltaTime / 5f;
+            _ObjectiveProgress += Time.deltaTime;
             yield return new WaitForEndOfFrame();
         }
     }
