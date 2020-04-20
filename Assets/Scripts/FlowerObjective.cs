@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,6 +9,8 @@ public class FlowerObjective : MonoBehaviour
     public float _ObjectiveProgress = 0.0f;
 
     public Transform _Beam;
+
+    public Vector3 GridPos;
 
     // Start is called before the first frame update
     void Start()
@@ -31,6 +34,20 @@ public class FlowerObjective : MonoBehaviour
         if (_ObjectiveProgress >= 1.0f)
         {
             _Beam.gameObject.SetActive(true);
+        }
+    }
+
+    internal void StartTransition()
+    {
+        StartCoroutine(Trans());
+    }
+
+    private IEnumerator Trans()
+    {
+        while (_ObjectiveProgress < 1)
+        {
+            _ObjectiveProgress += Time.deltaTime / 5f;
+            yield return new WaitForEndOfFrame();
         }
     }
 }

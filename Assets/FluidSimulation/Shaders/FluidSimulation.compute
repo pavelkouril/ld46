@@ -24,10 +24,6 @@ int _flowerCount;
 void ResetTextures(uint3 threadId : SV_DispatchThreadID)
 {
 	densityRW[threadId] = 0;
-	for (int i = 0; i < _flowerCount; i++)
-	{
-		flowersWatered[i] = 0;
-	}
 }
 
 [numthreads(10, 10, 10)]
@@ -182,7 +178,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 
 					if (current > neighbour && neighbour < 1)
 					{
-						float toTransfer = clamp(densityCurrent / maxNeighbours, 0, 1 - neighbour);
+						float toTransfer = clamp(densityCurrent / 5, 0, 1 - neighbour);
 						densityRW[neighbourLoc] = densityNeighbour + toTransfer;
 						densityCurrent -= toTransfer;
 					}
@@ -248,7 +244,11 @@ void CheckFlowers(uint3 threadId : SV_DispatchThreadID)
 {
 	for (int i = 0; i < _flowerCount; i++)
 	{
-		flowersWatered[i] = 0;
+		if (flowersWatered[i] != 0)
+		{
+			continue;
+		}
+
 		for (int a = -2; a <= 2; a++)
 		{
 			for (int b = -2; b <= 2; b++)

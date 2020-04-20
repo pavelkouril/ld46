@@ -67,7 +67,7 @@ public class VoxelGrid : MonoBehaviour
 
     public ComputeBuffer FlowersWateredBuffer { get; private set; }
 
-    public List<Vector3> Flowers { get; private set; }
+    public List<FlowerObjective> Flowers { get; private set; }
 
     private bool _simStarted;
     //private int _remainingFluid = 15;
@@ -80,6 +80,8 @@ public class VoxelGrid : MonoBehaviour
     private bool _shouldDig = true;
     [SerializeField]
     private Text _lmbModeText;
+
+    private AsyncGPUReadbackRequest _flowersRequest;
 
     private void Awake()
     {
@@ -112,7 +114,8 @@ public class VoxelGrid : MonoBehaviour
         CollisionField = new byte[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
 
-        Flowers = new List<Vector3>();
+        Flowers = new List<FlowerObjective>();
+        var FlowerPos = new List<Vector3>();
 
         for (int x = 0; x < data.Size.x; x++)
         {
@@ -147,15 +150,22 @@ public class VoxelGrid : MonoBehaviour
                     }
                     if (VoxLevelLoader.IsFlower(color))
                     {
-                        Flowers.Add(new Vector3(x, y, z) + Vector3.one);
+                        var f = new Vector3(x, y, z) + Vector3.one;
+                        FlowerPos.Add(f);
+                        var go = GameObject.Instantiate(_objectiveFlower);
+                        go.transform.position = f * 0.1f - transform.position - transform.localScale / 2.0f;
+                        var flow = go.GetComponent<FlowerObjective>();
+                        flow.GridPos = new Vector3(x, y, z);
+                        Flowers.Add(flow);
                     }
                 }
             }
         }
 
         FlowersPositionsBuffer = new ComputeBuffer(Flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
-        FlowersPositionsBuffer.SetData(Flowers);
-        FlowersWateredBuffer = new ComputeBuffer(Flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        FlowersPositionsBuffer.SetData(FlowerPos);
+        FlowersWateredBuffer = new ComputeBuffer(Flowers.Count, sizeof(int), ComputeBufferType.Structured);
+        FlowersWateredBuffer.SetData(new int[Flowers.Count]);
         Shader.SetInt("_flowerCount", Flowers.Count);
 
         AppendVertexBuffer = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
@@ -172,12 +182,6 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
         CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
-
-        foreach (var f in Flowers)
-        {
-            var go = GameObject.Instantiate(_objectiveFlower);
-            go.transform.position = f * 0.1f - transform.position - transform.localScale / 2.0f;
-        }
 
         ToGPUCollisionField();
 
@@ -206,7 +210,7 @@ public class VoxelGrid : MonoBehaviour
                         continue;
                     }
 
-                    if (Flowers.Any(p => (p.x >= newPos.x - 1 && p.x <= newPos.x + 1) && (p.z >= newPos.z - 1 && p.z <= newPos.z + 1)))
+                    if (Flowers.Any(p => (p.GridPos.x >= newPos.x - 1 && p.GridPos.x <= newPos.x + 1) && (p.GridPos.z >= newPos.z - 1 && p.GridPos.z <= newPos.z + 1)))
                     {
                         continue;
                     }
@@ -236,7 +240,7 @@ public class VoxelGrid : MonoBehaviour
                         continue;
                     }
 
-                    if (Flowers.Any(p => (p.x >= newPos.x - 1 && p.x <= newPos.x + 1) && (p.z >= newPos.z - 1 && p.z <= newPos.z + 1)))
+                    if (Flowers.Any(p => (p.GridPos.x >= newPos.x - 1 && p.GridPos.x <= newPos.x + 1) && (p.GridPos.z >= newPos.z - 1 && p.GridPos.z <= newPos.z + 1)))
                     {
                         continue;
                     }
@@ -370,6 +374,8 @@ public class VoxelGrid : MonoBehaviour
 
         MarchingCubes(densityTexture, AppendVertexBuffer);
         FixArgBuffer();
+
+        CheckFlowers();
     }
 
     public void StartWater()
@@ -430,9 +436,7 @@ public class VoxelGrid : MonoBehaviour
     {
         densityTexture = CreateTemporaryRT();
 
-        Shader.SetTexture(_kernelResetTextures, "collision", CollisionTexture);
         Shader.SetTexture(_kernelResetTextures, "densityRW", densityTexture);
-        Shader.SetBuffer(_kernelResetTextures, "flowersWatered", FlowersWateredBuffer);
 
         Shader.Dispatch(_kernelResetTextures, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
     }
@@ -483,15 +487,30 @@ public class VoxelGrid : MonoBehaviour
 
     private void CheckFlowers()
     {
+        if (!_flowersRequest.done)
+        {
+            return;
+        }
+
+        if (!_flowersRequest.hasError)
+        {
+            var flowersWatered = _flowersRequest.GetData<int>();
+            for (int i = 0; i < Flowers.Count; i++)
+            {
+                if (flowersWatered[i] != 0)
+                {
+                    Flowers[i].StartTransition();
+                }
+            }
+        }
+
+        Shader.SetTexture(_kernelCheckFlowers, "density", densityTexture);
         Shader.SetBuffer(_kernelCheckFlowers, "flowersWatered", FlowersWateredBuffer);
         Shader.SetBuffer(_kernelCheckFlowers, "flowersPositions", FlowersPositionsBuffer);
 
         Shader.Dispatch(_kernelCheckFlowers, 1, 1, 1);
 
-        AsyncGPUReadback.Request(FlowersWateredBuffer, (request) =>
-        {
-            var data = request.GetData<byte>();
-        });
+        _flowersRequest = AsyncGPUReadback.Request(FlowersWateredBuffer);
     }
 
     private RenderTexture CreateTemporaryRT()
@@ -513,5 +532,7 @@ public class VoxelGrid : MonoBehaviour
         ArgBuffer.Release();
         ArgBufferTerrain.Release();
         AppendVertexBufferTerrain.Release();
+        FlowersWateredBuffer.Release();
+        FlowersPositionsBuffer.Release();
     }
 }
