@@ -22,7 +22,7 @@ public class VoxelGrid : MonoBehaviour
     [SerializeField]
     private GameObject _objectiveFlower;
 
-    public float[] CollisionField { get; private set; }
+    public byte[] CollisionField { get; private set; }
 
     public byte[] GrassMask { get; private set; }
 
@@ -44,18 +44,11 @@ public class VoxelGrid : MonoBehaviour
 
     // the render textures used to hold the voxel values
     private RenderTexture densityTexture;
-    private RenderTexture velocityTexture;
-    private RenderTexture forceTexture;
     private Texture3D CollisionTexture;
-    private RenderTexture rbVelocityTexture;
-    private RenderTexture mlhTexture;
 
     // soil and marching cubes compute shaders kernels
     private int _kernelResetTextures;
     private int _kernelAddFluid;
-    private int _kernelCollisionField;
-    private int _kernelForceApplication;
-    private int _kernelForcePropagation;
     private int _kernelAdvection;
     private int _kernelDiffusion;
     private int _kernelOverflow;
@@ -92,8 +85,6 @@ public class VoxelGrid : MonoBehaviour
     {
         _kernelResetTextures = Shader.FindKernel("ResetTextures");
         _kernelAddFluid = Shader.FindKernel("AddFluid");
-        _kernelForceApplication = Shader.FindKernel("ForceApplication");
-        _kernelForcePropagation = Shader.FindKernel("ForcePropagation");
         _kernelAdvection = Shader.FindKernel("Advection");
         _kernelOverflow = Shader.FindKernel("Overflow");
         _kernelDiffusion = Shader.FindKernel("Diffusion");
@@ -118,7 +109,7 @@ public class VoxelGrid : MonoBehaviour
 
         transform.localScale = new Vector3(data.Size.x / 10f, data.Size.y / 10f, data.Size.z / 10f);
 
-        CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
+        CollisionField = new byte[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
 
         Flowers = new List<Vector3>();
@@ -175,6 +166,9 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetInt("_gridSizeX", GpuTexturesResolution.x);
         MarchingCubesShader.SetInt("_gridSizeY", GpuTexturesResolution.y);
         MarchingCubesShader.SetInt("_gridSizeZ", GpuTexturesResolution.z);
+
+        Shader.SetInt("_GridY", GpuTexturesResolution.y);
+
         MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
         CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
@@ -368,21 +362,11 @@ public class VoxelGrid : MonoBehaviour
 
         AddFluid();
 
-        ForceApplication();
-        for (var i = 0; i < 4; i++)
-        {
-            ForcePropagation();
-        }
-
         Advection();
 
         Diffusion();
 
-        for (var i = 0; i < 4; i++)
-        {
-            Overflow();
-        }
-
+        Overflow();
 
         MarchingCubes(densityTexture, AppendVertexBuffer);
         FixArgBuffer();
@@ -444,14 +428,11 @@ public class VoxelGrid : MonoBehaviour
 
     private void ResetTextures()
     {
-        densityTexture = CreateTemporaryRT(RenderTextureFormat.RHalf);
-        velocityTexture = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-        forceTexture = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
+        densityTexture = CreateTemporaryRT();
 
         Shader.SetTexture(_kernelResetTextures, "collision", CollisionTexture);
         Shader.SetTexture(_kernelResetTextures, "densityRW", densityTexture);
-        Shader.SetTexture(_kernelResetTextures, "velocityRW", velocityTexture);
-        Shader.SetTexture(_kernelResetTextures, "forceRW", forceTexture);
+        Shader.SetBuffer(_kernelResetTextures, "flowersWatered", FlowersWateredBuffer);
 
         Shader.Dispatch(_kernelResetTextures, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
     }
@@ -463,100 +444,37 @@ public class VoxelGrid : MonoBehaviour
             return;
         }
         _remainingFluid--;
+        Shader.SetTexture(_kernelAddFluid, "collision", CollisionTexture);
         Shader.SetTexture(_kernelAddFluid, "densityRW", densityTexture);
+
         Shader.Dispatch(_kernelAddFluid, 1, 1, 1);
-    }
-
-    private void ForceApplication()
-    {
-        var tempForce = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-
-        Shader.SetTexture(_kernelForceApplication, "force", forceTexture);
-        Shader.SetTexture(_kernelForceApplication, "forceRW", tempForce);
-        //Shader.SetTexture(_kernelForceApplication, "rbVelocity", rbVelocityTexture);
-        Shader.SetTexture(_kernelForceApplication, "density", densityTexture);
-        Shader.SetTexture(_kernelForceApplication, "collision", CollisionTexture);
-
-        Shader.Dispatch(_kernelForceApplication, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
-
-        RenderTexture.ReleaseTemporary(forceTexture);
-        forceTexture = tempForce;
-    }
-
-    private void ForcePropagation()
-    {
-        var tempForce = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-        var tempVelocity = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-        var tempDensity = CreateTemporaryRT(RenderTextureFormat.RFloat);
-
-        Shader.SetTexture(_kernelForcePropagation, "force", forceTexture);
-        Shader.SetTexture(_kernelForcePropagation, "forceRW", tempForce);
-        Shader.SetTexture(_kernelForcePropagation, "density", densityTexture);
-        Shader.SetTexture(_kernelForcePropagation, "densityRW", tempDensity);
-        Shader.SetTexture(_kernelForcePropagation, "velocity", velocityTexture);
-        Shader.SetTexture(_kernelForcePropagation, "velocityRW", tempVelocity);
-        Shader.SetTexture(_kernelForcePropagation, "collision", CollisionTexture);
-
-        Shader.Dispatch(_kernelForcePropagation, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
-
-        RenderTexture.ReleaseTemporary(forceTexture);
-        RenderTexture.ReleaseTemporary(densityTexture);
-        RenderTexture.ReleaseTemporary(velocityTexture);
-
-        forceTexture = tempForce;
-        densityTexture = tempDensity;
-        velocityTexture = tempVelocity;
     }
 
     private void Advection()
     {
-        var tempForce = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-        var tempVelocity = CreateTemporaryRT(RenderTextureFormat.ARGBFloat);
-        var tempDensity = CreateTemporaryRT(RenderTextureFormat.RFloat);
-
-        Shader.SetTexture(_kernelAdvection, "force", forceTexture);
-        Shader.SetTexture(_kernelAdvection, "forceRW", tempForce);
-        Shader.SetTexture(_kernelAdvection, "density", densityTexture);
-        Shader.SetTexture(_kernelAdvection, "densityRW", tempDensity);
-        Shader.SetTexture(_kernelAdvection, "velocity", velocityTexture);
-        Shader.SetTexture(_kernelAdvection, "velocityRW", tempVelocity);
+        Shader.SetTexture(_kernelAdvection, "densityRW", densityTexture);
         Shader.SetTexture(_kernelAdvection, "collision", CollisionTexture);
 
-        Shader.Dispatch(_kernelAdvection, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
-
-        RenderTexture.ReleaseTemporary(forceTexture);
-        RenderTexture.ReleaseTemporary(densityTexture);
-        RenderTexture.ReleaseTemporary(velocityTexture);
-
-        forceTexture = tempForce;
-        densityTexture = tempDensity;
-        velocityTexture = tempVelocity;
+        Shader.Dispatch(_kernelAdvection, GpuTexturesResolution.x / 8, 1, GpuTexturesResolution.z / 8);
     }
 
     private void Overflow()
     {
-        var tempDensity = CreateTemporaryRT(RenderTextureFormat.RFloat);
-
         Shader.SetTexture(_kernelOverflow, "collision", CollisionTexture);
-        Shader.SetTexture(_kernelOverflow, "density", densityTexture);
-        Shader.SetTexture(_kernelOverflow, "densityRW", tempDensity);
+        Shader.SetTexture(_kernelOverflow, "densityRW", densityTexture);
 
-        Shader.Dispatch(_kernelOverflow, GpuTexturesResolution.x / 8, GpuTexturesResolution.y / 8, GpuTexturesResolution.z / 8);
-
-        RenderTexture.ReleaseTemporary(densityTexture);
-
-        densityTexture = tempDensity;
+        Shader.Dispatch(_kernelOverflow, GpuTexturesResolution.x / 8, 1, GpuTexturesResolution.z / 8);
     }
 
     private void Diffusion()
     {
-        var tempDensity = CreateTemporaryRT(RenderTextureFormat.RFloat);
+        var tempDensity = CreateTemporaryRT();
 
         Shader.SetTexture(_kernelDiffusion, "density", densityTexture);
         Shader.SetTexture(_kernelDiffusion, "collision", CollisionTexture);
         Shader.SetTexture(_kernelDiffusion, "densityRW", tempDensity);
 
-        Shader.Dispatch(_kernelDiffusion, GpuTexturesResolution.x / 8, 8, GpuTexturesResolution.z / 8);
+        Shader.Dispatch(_kernelDiffusion, 1, GpuTexturesResolution.x / 8, 1);
 
         RenderTexture.ReleaseTemporary(densityTexture);
 
@@ -576,9 +494,9 @@ public class VoxelGrid : MonoBehaviour
         });
     }
 
-    private RenderTexture CreateTemporaryRT(RenderTextureFormat format)
+    private RenderTexture CreateTemporaryRT()
     {
-        var temp = RenderTexture.GetTemporary(GpuTexturesResolution.x, GpuTexturesResolution.y, 0, format);
+        var temp = RenderTexture.GetTemporary(GpuTexturesResolution.x, GpuTexturesResolution.y, 0, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat);
         temp.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         temp.volumeDepth = GpuTexturesResolution.z;
         temp.enableRandomWrite = true;

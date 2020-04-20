@@ -1,13 +1,12 @@
 ﻿#pragma kernel ResetTextures
 #pragma kernel AddFluid
-#pragma kernel ForceApplication
-#pragma kernel ForcePropagation
 #pragma kernel Advection
 #pragma kernel Overflow
 #pragma kernel Diffusion
 #pragma kernel CheckFlowers
 
 float _deltaTime;
+int _GridY;
 int _FluidInputX;
 int _FluidInputY;
 int _FluidInputZ;
@@ -15,189 +14,157 @@ int _FluidInputZ;
 Texture3D<float> density;
 RWTexture3D<float> densityRW;
 
-Texture3D<float3> velocity;
-RWTexture3D<float3> velocityRW;
-
-//RWTexture3D<float3> rbVelocity;
-
-Texture3D<float3> force;
-RWTexture3D<float3> forceRW;
-
 Texture3D<float> collision;
-
-RWTexture3D<int> mlh;
 
 RWStructuredBuffer<int> flowersWatered;
 StructuredBuffer<int3> flowersPositions;
 int _flowerCount;
 
-#include "Functions.cginc"
-
 [numthreads(8, 8, 8)]
 void ResetTextures(uint3 threadId : SV_DispatchThreadID)
 {
 	densityRW[threadId] = 0;
-	velocityRW[threadId] = float3(0, 0, 0);
-	forceRW[threadId] = float3(0, 0, 0);
+	for (int i = 0; i < _flowerCount; i++)
+	{
+		flowersWatered[i] = 0;
+	}
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(10, 10, 10)]
 void AddFluid(uint3 threadId : SV_DispatchThreadID)
 {
-	int3 inputLoc = int3(_FluidInputX, _FluidInputY, _FluidInputZ);
-	densityRW[inputLoc] = densityRW.Load(int4(inputLoc, 0)) + 1;
-}
+	float toAdd = 1;
 
-[numthreads(8, 8, 8)]
-void ForceApplication(uint3 threadId : SV_DispatchThreadID)
-{
-	float rigidbodyDensity = collision.Load(uint4(threadId, 0));
-	float fluidDensity = density.Load(uint4(threadId, 0));
-
-	// voxel colliding with rigidbody?
-	if (fluidDensity + rigidbodyDensity > 1 && rigidbodyDensity > 0)
+	for (int i = _FluidInputY + 5; i < _GridY; i += 2)
 	{
-		// then the rb velocity becomes the collision force
-		//forceRW[threadId] = normalize(rbVelocity.Load(uint4(threadId, 0)));
-	}
-	// voxel colliding only with other fluid
-	else if (fluidDensity > 1)
-	{
-		forceRW[threadId] = force.Load(uint4(threadId, 0));
-	}
-	// if voxel is not overflown, it's not colliding with anything
-	else
-	{
-		forceRW[threadId] = float3(0, 0, 0);
-	}
-}
-
-[numthreads(8, 8, 8)]
-// analogical to advection, but displaces based on forces from force application
-void ForcePropagation(uint3 threadId : SV_DispatchThreadID)
-{
-	int a, b, c;
-
-	float rigidbodyDensity = collision.Load(int4(threadId, 0));
-	float fluidDensity = density.Load(int4(threadId, 0));
-
-	float netInflow = 0;
-	float3 netInflowWeightedVelocities = float3(0, 0, 0);
-	float3 netInflowWeightedForces = float3(0, 0, 0);
-
-	for (a = -1; a <= 1; a++)
-	{
-		for (b = -1; b <= 1; b++)
+		if (toAdd > 0)
 		{
-			for (c = -1; c <= 1; c++)
+			int3 inputLoc = int3(_FluidInputX, i, _FluidInputZ);
+
+			float current = densityRW.Load(int4(inputLoc, 0)) + collision.Load(int4(inputLoc, 0));
+			if (current < 1)
 			{
-				float amount = inflowForce(threadId, int3(threadId.x + a, threadId.y + b, threadId.z + c));
-				netInflow += amount;
-				netInflowWeightedVelocities += velocity.Load(int4(threadId.x + a, threadId.y + b, threadId.z + c, 0)) * amount;
-				netInflowWeightedForces += force.Load(int4(threadId.x + a, threadId.y + b, threadId.z + c, 0)) * amount;
+				float willAdd = clamp(1 - current, 0, toAdd);
+				current += willAdd;
+				toAdd -= willAdd;
+
+				densityRW[inputLoc] = current;
 			}
 		}
 	}
-
-	float netBackflow = 0;
-	for (a = -1; a <= 1; a++)
-	{
-		for (b = -1; b <= 1; b++)
-		{
-			for (c = -1; c <= 1; c++)
-			{
-				netBackflow += backflowForce(threadId, int3(threadId.x + a, threadId.y + b, threadId.z + c));
-			}
-		}
-	}
-
-	if (fluidDensity + rigidbodyDensity >= 1)
-	{
-		float localInflow = inflowForce(threadId, threadId);
-		float totalAmount = netBackflow + localInflow;
-		densityRW[threadId] = totalAmount;
-		velocityRW[threadId] = totalAmount > 0 ? velocity.Load(int4(threadId, 0)) * localInflow / totalAmount : float3(0, 0, 0);
-		forceRW[threadId] = totalAmount + rigidbodyDensity > 1 ? force.Load(int4(threadId, 0)) * localInflow / totalAmount : float3(0, 0, 0);
-	}
-	else
-	{
-		float totalAmount = netBackflow + netInflow;
-		densityRW[threadId] = totalAmount;
-		velocityRW[threadId] = totalAmount > 0 ? netInflowWeightedVelocities / totalAmount : float3(0, 0, 0);
-		forceRW[threadId] = totalAmount + rigidbodyDensity > 1 ? netInflowWeightedForces / totalAmount : float3(0, 0, 0);
-	}
 }
 
-[numthreads(8, 8, 8)]
-// displace the fluid in one timestep based on their velocities
+[numthreads(8, 1, 8)]
 void Advection(uint3 threadId : SV_DispatchThreadID)
 {
-	int a, b, c;
-
-	float rigidbodyDensity = collision.Load(uint4(threadId, 0));
-	float fluidDensity = density.Load(uint4(threadId, 0));
-
-	float netInflow = 0;
-	float3 netInflowWeightedVelocities = float3(0, 0, 0);
-	float3 netInflowWeightedForces = float3(0, 0, 0);
-
-	for (a = -1; a <= 1; a++)
+	for (int i = 0; i < _GridY; i++)
 	{
-		for (c = -1; c <= 1; c++)
+		int3 loc = int3(threadId.x, i, threadId.z);
+
+		float densityCurrent = densityRW.Load(int4(loc, 0));
+		float densityUp = densityRW.Load(int4(loc + uint3(0, 1, 0), 0));
+
+		float collisionCurrent = collision.Load(int4(loc, 0));
+
+		float current = densityCurrent + collisionCurrent;
+
+		if (current < 1 && densityUp > 0)
 		{
-			for (b = -1; b <= 1; b++)
-			{
-				float amount = inflow(threadId, threadId + int3(a, b, c)); // compute how much fluid is received
-				netInflow += amount;
-				netInflowWeightedVelocities += velocity.Load(int4(threadId + int3(a, b, c), 0)) * amount;
-				netInflowWeightedForces += force.Load(int4(threadId + int3(a, b, c), 0)) * amount;
-			}
+			float toTransfer = clamp(1 - current, 0, densityUp);
+			densityRW[loc + uint3(0, 1, 0)] = densityUp - toTransfer;
+			densityCurrent += toTransfer;
 		}
+
+		densityRW[loc] = densityCurrent;
 	}
-
-	float netBackflow = 0;
-	for (a = -1; a <= 1; a++)
-	{
-		for (c = -1; c <= 1; c++)
-		{
-			for (b = -1; b <= 1; b++)
-			{
-				netBackflow += backflow(threadId, threadId + int3(a, b, c)); // compute how much fluid is returned due to locked voxels
-			}
-		}
-	}
-
-	float newDensity = 0;
-	float3 newVelocity = float3(0, 0, 0);
-	float3 newForce = float3(0, 0, 0);
-
-	// determine the new densities, based if the voxel was overflown or not
-	// the velocities and forces are displaced with densities, so they need to be recomputed as well
-	if (fluidDensity + rigidbodyDensity >= 1)
-	{
-		float3 localVelocity = velocity.Load(int4(threadId, 0));
-		float3 localForce = force.Load(int4(threadId, 0));
-		float localInflow = inflow(threadId, threadId);
-
-		newDensity = netBackflow + localInflow;
-		newVelocity = newDensity > 0.05 ? (localInflow * localVelocity) / newDensity : float3(0, 0, 0);
-		newForce = newDensity > 0.05 ? (localInflow * localForce) / newDensity : float3(0, 0, 0);
-	}
-	else
-	{
-		newDensity = netBackflow + netInflow;
-		newVelocity = newDensity > 0.05 ? netInflowWeightedVelocities / newDensity : float3(0, 0, 0);
-		newForce = newDensity > 0.05 ? netInflowWeightedForces / newDensity : float3(0, 0, 0);
-	}
-
-	densityRW[threadId] = newDensity;
-	velocityRW[threadId] = newDensity > 0 ? newVelocity + float3(0, -0.981 * _deltaTime, 0) : float3(0, 0, 0);
-	forceRW[threadId] = newForce;
 }
 
-[numthreads(8, 8, 8)]
+[numthreads(1, 8, 1)]
+void Diffusion(uint3 threadId : SV_DispatchThreadID)
+{
+	int y = threadId.y;
+
+	for (int x = 0; x < _GridY; x++)
+	{
+		for (int z = 0; z < _GridY; z++)
+		{
+			int3 loc = int3(x, y, z);
+			densityRW[loc] = density.Load(int4(loc, 0));
+		}
+	}
+
+	for (int x = 0; x < _GridY; x++)
+	{
+		for (int z = 0; z < _GridY; z++)
+		{
+			int3 loc = int3(x, y, z);
+			float densityDown = density.Load(int4(loc + uint3(0, -1, 0), 0));
+
+			if (densityDown < 1)
+			{
+				continue;
+			}
+
+			float densityCurrent = densityRW.Load(int4(loc, 0));
+			float collisionCurrent = collision.Load(int4(loc, 0));
+
+			float current = densityCurrent + collisionCurrent;
+
+			for (int a = -1; a <= 1; a++)
+			{
+				for (int c = -1; c <= 1; c++)
+				{
+					if (a == c)
+					{
+						continue;
+					}
+
+					int3 neighbourLoc = loc + int3(a, 0, c);
+					float densityNeighbour = densityRW.Load(int4(neighbourLoc, 0));
+					float collisionNeighbour = collision.Load(int4(neighbourLoc, 0));
+					float neighbour = densityNeighbour + collisionNeighbour;
+
+					if (current > neighbour && neighbour < 1)
+					{
+						float toTransfer = clamp(densityCurrent / 5, 0, 1 - neighbour);
+						densityRW[neighbourLoc] = densityNeighbour + toTransfer;
+						densityCurrent -= toTransfer;
+					}
+
+				}
+			}
+
+			densityRW[loc] = densityCurrent;
+		}
+	}
+}
+
+
+[numthreads(8, 1, 8)]
 void Overflow(uint3 threadId : SV_DispatchThreadID)
 {
+	for (int i = 0; i < _GridY; i++)
+	{
+		int3 loc = int3(threadId.x, i, threadId.z);
+
+		float densityCurrent = densityRW.Load(int4(loc, 0));
+		float densityUp = densityRW.Load(int4(loc + uint3(0, 1, 0), 0));
+
+		float collisionCurrent = collision.Load(int4(loc, 0));
+
+		float current = densityCurrent + collisionCurrent;
+
+		if (current > 1)
+		{
+			float toTransfer = clamp(densityCurrent - 1, 0, densityCurrent);
+			densityRW[loc + uint3(0, 1, 0)] = densityUp + toTransfer;
+			densityCurrent += toTransfer;
+		}
+
+		densityRW[loc] = densityCurrent;
+	}
+
+	/*
 	float densityLocal = density.Load(int4(threadId, 0));
 	float rigidbodyLocal = collision.Load(int4(threadId, 0));
 	float densityDown = density.Load(int4(threadId + int3(0, -1, 0), 0));
@@ -205,64 +172,20 @@ void Overflow(uint3 threadId : SV_DispatchThreadID)
 	float densityUp = density.Load(int4(threadId + int3(0, 1, 0), 0));
 	float rigidbodyUp = collision.Load(int4(threadId + int3(0, 1, 0), 0));
 
-	float newDensity = densityLocal;
+	float newdensity = densityLocal;
 
 	// transfer as much as possible not to be overflown
 	if (densityLocal + rigidbodyLocal > 1 && rigidbodyUp < 1)
 	{
-		newDensity = clamp(1 - rigidbodyLocal, 0, densityLocal);
+		newdensity = clamp(1 - rigidbodyLocal, 0, densityLocal);
 	}
-	// receive fluid from bottom voxel
+	// receive density from bottom voxel
 	if (densityDown + rigidbodyDown > 1 && rigidbodyLocal < 1)
 	{
-		newDensity += clamp(densityDown + rigidbodyDown - 1, 0, densityDown);
+		newdensity += clamp(densityDown + rigidbodyDown - 1, 0, densityDown);
 	}
-	densityRW[threadId] = newDensity;
+	densityRW[threadId] = newdensity;*/
 }
-
-[numthreads(8, 8, 8)]
-void Diffusion(uint3 threadId : SV_DispatchThreadID)
-{
-	// load all 3 voxels in this column
-	float densityLocal = density.Load(int4(threadId, 0));
-	float rigidbodyLocal = collision.Load(int4(threadId, 0));
-
-	float allowedDiff = 0.001;
-
-	int a, c;
-
-	float newDensity = densityLocal;
-	
-	for (a = -1; a <= 1; a++)
-	{
-		for (c = -1; c <= 1; c++)
-		{
-			if (a == c)
-			{
-				continue;
-			}
-
-			// load the voxels in the other column
-			float densityOther = density.Load(int4(threadId + int3(a, 0, c), 0));
-			float rigidbodyOther = collision.Load(int4(threadId + int3(a, 0, c), 0));
-
-			if (densityLocal + rigidbodyLocal > densityOther + rigidbodyOther - allowedDiff) // if the current voxel has more volume than its neighbouur
-			{
-				// transfer at most 1/8th of your volume
-				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 4);
-			}
-
-			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther + allowedDiff) // if the current voxel has less volume than its neighbour
-			{
-				// recieve at most 1/8th of the neighbours volume
-				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 4);
-			}
-		}
-	}
-
-	densityRW[threadId] = newDensity;
-}
-
 
 [numthreads(1, 1, 1)]
 void CheckFlowers(uint3 threadId : SV_DispatchThreadID)
