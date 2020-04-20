@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -62,9 +63,11 @@ public class VoxelGrid : MonoBehaviour
     public ComputeBuffer AppendVertexBufferTerrain { get; private set; }
     public ComputeBuffer ArgBuffer { get; private set; }
 
-    public ComputeBuffer FlowersPositions { get; private set; }
+    public ComputeBuffer FlowersPositionsBuffer { get; private set; }
 
-    public ComputeBuffer FlowersWatered { get; private set; }
+    public ComputeBuffer FlowersWateredBuffer { get; private set; }
+
+    public List<Vector3> Flowers { get; private set; }
 
     private bool _simStarted;
     //private int _remainingFluid = 15;
@@ -107,7 +110,7 @@ public class VoxelGrid : MonoBehaviour
         CollisionField = new float[data.Size.x * data.Size.y * data.Size.z];
         GrassMask = new byte[data.Size.x * data.Size.y];
 
-        var flowers = new List<Vector3>();
+        Flowers = new List<Vector3>();
 
         for (int x = 0; x < data.Size.x; x++)
         {
@@ -136,15 +139,16 @@ public class VoxelGrid : MonoBehaviour
                     }
                     if (VoxLevelLoader.IsFlower(color))
                     {
-                        flowers.Add(new Vector3(x, y, z) + Vector3.one);
+                        Flowers.Add(new Vector3(x, y, z) + Vector3.one);
                     }
                 }
             }
         }
 
-        FlowersPositions = new ComputeBuffer(flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
-        FlowersWatered = new ComputeBuffer(flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
-        Shader.SetInt("_flowerCount", flowers.Count);
+        FlowersPositionsBuffer = new ComputeBuffer(Flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        FlowersPositionsBuffer.SetData(Flowers);
+        FlowersWateredBuffer = new ComputeBuffer(Flowers.Count, sizeof(float) * 3, ComputeBufferType.Structured);
+        Shader.SetInt("_flowerCount", Flowers.Count);
 
         AppendVertexBuffer = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
         AppendVertexBufferTerrain = new ComputeBuffer(GpuTexturesResolution.x * GpuTexturesResolution.y * GpuTexturesResolution.z * 5, sizeof(float) * 24, ComputeBufferType.Append);
@@ -156,6 +160,13 @@ public class VoxelGrid : MonoBehaviour
         MarchingCubesShader.SetFloat("_isoLevel", 0.0001f);
 
         CollisionTexture = new Texture3D(GpuTexturesResolution.x, GpuTexturesResolution.y, GpuTexturesResolution.z, UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat, UnityEngine.Experimental.Rendering.TextureCreationFlags.None);
+
+        foreach (var f in Flowers)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
+            go.transform.position = f * 0.1f - transform.position - transform.localScale / 2.0f;
+        }
 
         ToGPUCollisionField();
 
@@ -182,7 +193,13 @@ public class VoxelGrid : MonoBehaviour
                         continue;
                     }
 
+                    if (Flowers.Any(p => p.x == newPos.x && p.z == newPos.z))
+                    {
+                        continue;
+                    }
+
                     CollisionField[Vector3IntPosToLinearized(newPos)] = 0;
+                    GrassMask[newPos.x + GridResolution.x * newPos.z] = 0;
                 }
             }
         }
@@ -483,12 +500,12 @@ public class VoxelGrid : MonoBehaviour
 
     private void CheckFlowers()
     {
-        Shader.SetBuffer(_kernelCheckFlowers, "flowersWatered", FlowersWatered);
-        Shader.SetBuffer(_kernelCheckFlowers, "flowersPositions", FlowersPositions);
+        Shader.SetBuffer(_kernelCheckFlowers, "flowersWatered", FlowersWateredBuffer);
+        Shader.SetBuffer(_kernelCheckFlowers, "flowersPositions", FlowersPositionsBuffer);
 
         Shader.Dispatch(_kernelCheckFlowers, 1, 1, 1);
 
-        AsyncGPUReadback.Request(FlowersWatered, (request) =>
+        AsyncGPUReadback.Request(FlowersWateredBuffer, (request) =>
         {
             var data = request.GetData<byte>();
         });
