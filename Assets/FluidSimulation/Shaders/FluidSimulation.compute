@@ -191,7 +191,7 @@ void Advection(uint3 threadId : SV_DispatchThreadID)
 	}
 
 	densityRW[threadId] = newDensity;
-	velocityRW[threadId] = newDensity > 0 ? newVelocity + float3(0, -9.81 * _deltaTime, 0) : float3(0, 0, 0);
+	velocityRW[threadId] = newDensity > 0 ? newVelocity + float3(0, -0.981 * _deltaTime, 0) : float3(0, 0, 0);
 	forceRW[threadId] = newForce;
 }
 
@@ -227,7 +227,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 	float densityLocal = density.Load(int4(threadId, 0));
 	float rigidbodyLocal = collision.Load(int4(threadId, 0));
 
-	float allowedDiff = 0.01;
+	float allowedDiff = 0.001;
 
 	int a, c;
 
@@ -237,7 +237,7 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 	{
 		for (c = -1; c <= 1; c++)
 		{
-			if (a == 0 && c == 0)
+			if (a == c)
 			{
 				continue;
 			}
@@ -249,13 +249,13 @@ void Diffusion(uint3 threadId : SV_DispatchThreadID)
 			if (densityLocal + rigidbodyLocal > densityOther + rigidbodyOther - allowedDiff) // if the current voxel has more volume than its neighbouur
 			{
 				// transfer at most 1/8th of your volume
-				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 8);
+				newDensity -= clamp(densityLocal - (densityOther + rigidbodyOther), 0, densityLocal / 4);
 			}
 
-			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther - allowedDiff) // if the current voxel has less volume than its neighbour
+			if (densityLocal + rigidbodyLocal < densityOther + rigidbodyOther + allowedDiff) // if the current voxel has less volume than its neighbour
 			{
 				// recieve at most 1/8th of the neighbours volume
-				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 8);
+				newDensity += clamp(densityOther - (densityLocal + rigidbodyLocal), 0, densityOther / 4);
 			}
 		}
 	}
@@ -270,11 +270,11 @@ void CheckFlowers(uint3 threadId : SV_DispatchThreadID)
 	for (int i = 0; i < _flowerCount; i++)
 	{
 		flowersWatered[i] = 0;
-		for (int a = -1; a <= 1; a++)
+		for (int a = -2; a <= 2; a++)
 		{
-			for (int b = -1; b <= 1; b++)
+			for (int b = -2; b <= 2; b++)
 			{
-				for (int c = -1; c <= 1; c++)
+				for (int c = -2; c <= 2; c++)
 				{
 					if (density.Load(int4(flowersPositions[i] + int3(a, b, c), 0)) > 0)
 					{

@@ -141,6 +141,12 @@ public class VoxelGrid : MonoBehaviour
                         Shader.SetInt("_FluidInputX", x + 1);
                         Shader.SetInt("_FluidInputY", y + 1);
                         Shader.SetInt("_FluidInputZ", z + 1);
+
+                        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        go.transform.localScale = new Vector3(0.1f, 0.25f, 0.1f);
+                        go.transform.position = new Vector3(x, y, z) * 0.1f - transform.position - transform.localScale / 2.0f;
+
+                        CollisionField[flatIndex] = 0;
                     }
                     if (VoxLevelLoader.IsGrass(color))
                     {
@@ -234,7 +240,7 @@ public class VoxelGrid : MonoBehaviour
                         continue;
                     }
 
-                    if (Flowers.Any(p => p.x == newPos.x && p.z == newPos.z))
+                    if (Flowers.Any(p => (p.x >= newPos.x - 1 && p.x <= newPos.x + 1) && (p.z >= newPos.z - 1 && p.z <= newPos.z + 1)))
                     {
                         continue;
                     }
@@ -366,12 +372,13 @@ public class VoxelGrid : MonoBehaviour
 
         Advection();
 
+        Diffusion();
+
         for (var i = 0; i < 4; i++)
         {
             Overflow();
         }
 
-        Diffusion();
 
         MarchingCubes(densityTexture, AppendVertexBuffer);
         FixArgBuffer();
