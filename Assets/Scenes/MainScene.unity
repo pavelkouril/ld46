@@ -360,6 +360,7 @@ MonoBehaviour:
     type: 3}
   Shader: {fileID: 7200000, guid: b9f14d8074bbbc44db6e2f4947ce4f2a, type: 3}
   MarchingCubesShader: {fileID: 7200000, guid: 4eeb2041db2c27041a5e6f3ea600e82a, type: 3}
+  _Probe: {fileID: 467179895}
   _lmbModeText: {fileID: 869064056}
 --- !u!4 &139884094
 Transform:
@@ -758,7 +759,7 @@ ReflectionProbe:
   serializedVersion: 2
   m_Type: 0
   m_Mode: 1
-  m_RefreshMode: 1
+  m_RefreshMode: 2
   m_TimeSlicingMode: 0
   m_Resolution: 256
   m_UpdateFrequency: 0
