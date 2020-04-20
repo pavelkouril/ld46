@@ -23,7 +23,7 @@
             {
                 UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
-				float3 vertColors : TEXCOORD0;
+                nointerpolation float3 vertColors : TEXCOORD0;
             };
 
             sampler2D _MainTex;
