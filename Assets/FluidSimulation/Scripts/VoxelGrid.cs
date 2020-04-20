@@ -98,6 +98,8 @@ public class VoxelGrid : MonoBehaviour
 
     public AudioClip _clip;
 
+    public Button digbutton;
+
     private void Awake()
     {
         _kernelResetTextures = Shader.FindKernel("ResetTextures");
@@ -423,6 +425,7 @@ public class VoxelGrid : MonoBehaviour
     public void StartWater()
     {
         _simStarted = true;
+        digbutton.gameObject.SetActive(false);
     }
 
     public void ToggleLmbMode()
@@ -438,6 +441,7 @@ public class VoxelGrid : MonoBehaviour
 
     public void ResetGrid()
     {
+        digbutton.gameObject.SetActive(true);
         _remainigFluidCurr = _remainingFluid;
         _remainigTerraformCurr = _remainigTerraform;
 

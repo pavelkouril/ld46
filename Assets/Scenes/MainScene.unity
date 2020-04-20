@@ -367,7 +367,8 @@ MonoBehaviour:
   _victoryScreen: {fileID: 833184883}
   _arrow: {fileID: 9051836518939937530, guid: f977ce233f807a94c8c6d67037c77742, type: 3}
   remainTerraformText: {fileID: 956973210}
-  _clip: {fileID: 8300000, guid: ad7f4211e1e849c4a9a6ad5c57233327, type: 3}
+  _clip: {fileID: 8300000, guid: 74cb7eae583a0a345b5346524829ad11, type: 3}
+  digbutton: {fileID: 1283477365}
 --- !u!4 &139884094
 Transform:
   m_ObjectHideFlags: 0
