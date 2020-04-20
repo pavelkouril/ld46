@@ -97,7 +97,7 @@ public class OrbitCamera : MonoBehaviour
         if (target)
         {
             // Take input (only when button pressed)
-            if (Input.GetMouseButton(0))
+            if (Input.GetMouseButton(1))
             {
                 x += Input.GetAxis("Mouse X") * xSpeed * distance * 0.02f;
                 y -= Input.GetAxis("Mouse Y") * ySpeed * 0.02f;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 /// <summary>
 /// The class taking care of the sand simulation and its rendering
@@ -17,7 +18,7 @@ public class VoxelGrid : MonoBehaviour
 
     [SerializeField]
     private Material _terrainMaterial;
-    
+
     [SerializeField]
     private GameObject _objectiveFlower;
 
@@ -80,6 +81,10 @@ public class VoxelGrid : MonoBehaviour
     private MeshFilter _terrainMeshFilter;
     private MeshRenderer _terrainMeshRenderer;
     private MeshCollider _terrainMeshCollider;
+
+    private bool _shouldDig = true;
+    [SerializeField]
+    private Text _lmbModeText;
 
     private void Awake()
     {
@@ -203,6 +208,36 @@ public class VoxelGrid : MonoBehaviour
                     }
 
                     CollisionField[Vector3IntPosToLinearized(newPos)] = 0;
+                    GrassMask[newPos.x + GridResolution.x * newPos.z] = 0;
+                }
+            }
+        }
+
+        // regenerate collision field
+        ToGPUCollisionField();
+    }
+
+    public void AddTerrain(Vector3Int position)
+    {
+        // remove the terrain at the given position - and also remove grass at this point, since we are destroying the topmost level always
+        for (int i = -1; i <= 1; i++)
+        {
+            for (int j = -1; j <= 0; j++)
+            {
+                for (int k = -1; k <= 1; k++)
+                {
+                    var newPos = position + new Vector3Int(i, j, k);
+                    if (newPos.x <= 0 || newPos.x >= GridResolution.x - 1 || newPos.y <= 0 || newPos.y >= GridResolution.y - 1 || newPos.z <= 0 || newPos.z >= GridResolution.z - 1)
+                    {
+                        continue;
+                    }
+
+                    if (Flowers.Any(p => p.x == newPos.x && p.z == newPos.z))
+                    {
+                        continue;
+                    }
+
+                    CollisionField[Vector3IntPosToLinearized(newPos)] = 1;
                     GrassMask[newPos.x + GridResolution.x * newPos.z] = 0;
                 }
             }
@@ -340,6 +375,17 @@ public class VoxelGrid : MonoBehaviour
         FixArgBuffer();
     }
 
+    public void StartWater()
+    {
+        _simStarted = true;
+    }
+
+    public void ToggleLmbMode()
+    {
+        _shouldDig = !_shouldDig;
+        _lmbModeText.text = _shouldDig ? "DIG" : "ADD";
+    }
+
     private void Update()
     {
         if (Input.GetMouseButtonUp(0))
@@ -348,13 +394,15 @@ public class VoxelGrid : MonoBehaviour
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
                 var pos = (hit.point - transform.position + (transform.localScale / 2)) * 10;
-                RemoveTerrain(new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z)));
+                if (_shouldDig)
+                {
+                    RemoveTerrain(new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z)));
+                }
+                else
+                {
+                    AddTerrain(new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z)));
+                }
             }
-        }
-
-        if (Input.GetKeyUp(KeyCode.P))
-        {
-            _simStarted = true;
         }
     }
 
@@ -532,5 +580,7 @@ public class VoxelGrid : MonoBehaviour
     {
         AppendVertexBuffer.Release();
         ArgBuffer.Release();
+        ArgBufferTerrain.Release();
+        AppendVertexBufferTerrain.Release();
     }
 }
