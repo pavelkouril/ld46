@@ -54,13 +54,14 @@
             {
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
-				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
+				float2 heightCoord = (((_Position.xyz + mul(UNITY_MATRIX_M, v.vertex).xyz) / (_Size * 0.5)) * 0.5 + 0.5).xz;
+				float height = tex2Dlod(_HeightTex, float4(heightCoord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				float4 vertex = v.vertex;
 				vertex.x = vertex.x + vertex.z * noise * 0.2;
 				vertex.y = vertex.y + vertex.z * noise * 0.2;
-				vertex.z *= size;
+				vertex.z *= clamp(size * 2.0, 0.0, 1.0);
 				if (vertex.z < 0.1)
 				{
 					vertex.w = 0.0;
@@ -88,7 +89,7 @@
                 // apply fog
                 UNITY_APPLY_FOG(i.fogCoord, col);
 				fixed shadow = SHADOW_ATTENUATION(i);
-				//return fixed4(i.tmp, 0.0, 0.0, 1.0);
+				//return fixed4(i.tmp * 0.01, 0.0, 0.0, 1.0);
 				return col * max(shadow, 0.3);
             }
             ENDCG
@@ -138,13 +139,14 @@
 			{
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
-				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
+				float2 heightCoord = (((_Position.xyz + mul(UNITY_MATRIX_M, v.vertex).xyz) / (_Size * 0.5)) * 0.5 + 0.5).xz;
+				float height = tex2Dlod(_HeightTex, float4(heightCoord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				float4 vertex = v.vertex;
 				vertex.x = vertex.x + vertex.z * noise * 0.2;
 				vertex.y = vertex.y + vertex.z * noise * 0.2;
-				vertex.z *= size;
+				vertex.z *= clamp(size * 2.0, 0.0, 1.0);
 				if (vertex.z < 0.1)
 				{
 					vertex.w = 0.0;
@@ -213,12 +215,13 @@
 			{
 				float2 coord = ((mul(UNITY_MATRIX_M, v.vertex).xyz / (_Size * 0.5)) * 0.5 + 0.5).xz;
 				float size = tex2Dlod(_MaskTex, float4(coord.xy, 0.0, 0.0)).x;
-				float height = tex2Dlod(_HeightTex, float4(coord.xy, 0.0, 0.0)).x;
+				float2 heightCoord = (((_Position.xyz + mul(UNITY_MATRIX_M, v.vertex).xyz) / (_Size * 0.5)) * 0.5 + 0.5).xz;
+				float height = tex2Dlod(_HeightTex, float4(heightCoord.xy, 0.0, 0.0)).x;
 				float noise = 2.0 * tex2Dlod(_NoiseTex, float4(coord.xy + _Time * 0.1, 0.0, 0.0)).x - 1.0;
 
 				v.vertex.x = v.vertex.x + v.vertex.z * noise * 0.2;
 				v.vertex.y = v.vertex.y + v.vertex.z * noise * 0.2;
-				v.vertex.z *= size;
+				v.vertex.z *= clamp(size * 2.0, 0.0, 1.0);
 				v.vertex.z += height * _OffsetFactor;
 
 				v2f o;

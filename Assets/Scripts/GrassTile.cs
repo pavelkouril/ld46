@@ -87,7 +87,7 @@ public class GrassTile : MonoBehaviour
     {
         _renderer.material.SetFloat("_AlphaCutoff", _Cutoff);
         _renderer.material.SetFloat("_Size", _InstanceSize);
-        _renderer.material.SetVector("_Position", new Vector4(_InstanceOffset.x, _InstanceOffset.y, 0.0f, 0.0f));
+        _renderer.material.SetVector("_Position", new Vector4(_InstanceOffset.x, 0.0f, _InstanceOffset.y, 0.0f));
         _renderer.material.SetFloat("_SizeCutoff", _InstanceSizeCutout);
         _renderer.material.SetFloat("_OffsetFactor", 1.0f / transform.localScale.x);
         _renderer.material.SetTexture("_HeightTex", _HeightMap);
