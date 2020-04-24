@@ -215,6 +215,8 @@ public class VoxelGrid : MonoBehaviour
         ToGPUCollisionField();
 
         ResetTextures();
+
+        Resources.UnloadUnusedAssets();
     }
 
     private int Vector3IntPosToLinearized(Vector3Int pos)
@@ -465,6 +467,11 @@ public class VoxelGrid : MonoBehaviour
         AppendVertexBufferTerrain.Release();
         FlowersWateredBuffer.Release();
         FlowersPositionsBuffer.Release();
+
+        if (densityTexture != null)
+        {
+            RenderTexture.ReleaseTemporary(densityTexture);
+        }
 
         Setup(_levelData, false);
     }
